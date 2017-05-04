@@ -1,0 +1,65 @@
+## @file
+#
+#  Copyright (c) 2016, General Electric Company. All rights reserved.<BR>
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = BootUpdateManager
+  FILE_GUID                      = 669657e3-4da9-4626-a8ed-bd71460c9481
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = BUM_main
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64 IPF EBC
+#
+
+[Sources]
+  BootUpdateManager.c
+  __BootUpdateManager.h
+  BootStat.c
+  BootStat.h
+  __BootStat.h
+  LibSmBios.c
+  LibSmBios.h
+  __LibSmBios.h
+  LogPrint.c
+  LogPrint.h
+  __LogPrint.h
+  LibCommon.c
+  LibCommon.h
+  __LibCommon.h
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  BaseLib
+  DevicePathLib
+  PcdLib
+
+[Protocols]
+  gEfiLoadedImageProtocolGuid                             ## CONSUMES
+  gEfiDevicePathProtocolGuid                              ## CONSUMES
+  gEfiSimpleFileSystemProtocolGuid                        ## CONSUMES
+  gEfiUnicodeCollationProtocolGuid                        ## CONSUMES
+  gEfiUnicodeCollation2ProtocolGuid                       ## CONSUMES
+  gEfiSmbiosProtocolGuid
+
+[Guids]
+  gEfiFileInfoGuid                                        ## CONSUMES
+  gEfiGlobalVariableGuid                                  ## CONSUMES
+  gEfiImageSecurityDatabaseGuid                           ## CONSUMES
+
+[Pcd]
+  gEfiMdePkgTokenSpaceGuid.PcdMaximumUnicodeStringLength  ## CONSUMES
+
