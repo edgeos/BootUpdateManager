@@ -26,9 +26,9 @@ typedef enum {
     BUM_LOADEDIMAGE_FWTOROOT = 0,
     BUM_LOADEDIMAGE_ROOTTOPRIM = 1,
     BUM_LOADEDIMAGE_PRIMTOBACK = 2,
-    BUM_LOADEDIMAGE_PRIMTOLODR = 3,
+    BUM_LOADEDIMAGE_PRIMTOGRUB = 3,
     BUM_LOADEDIMAGE_ROOTTOBACK = 4,
-    BUM_LOADEDIMAGE_BACKTOLODR = 5,
+    BUM_LOADEDIMAGE_BACKTOGRUB = 5,
     BUM_LOADEDIMAGE_FAIL = 6,
     BUM_LOADEDIMAGE_STATE_COUNT
 } BUM_LOADEDIMAGE_STATE_t;
@@ -47,10 +47,10 @@ static BUM_LOADEDIMAGE_TYPE_t BUM_STATE_TO_TYPE_TABLE[BUM_LOADEDIMAGE_STATE_COUN
         {   BUM_LOADEDIMAGE_ROOT, /* FWTOROOT */
             BUM_LOADEDIMAGE_PRIM, /* ROOTTOPRIM */
             BUM_LOADEDIMAGE_BACK, /* PRIMTOBACK */
-            BUM_LOADEDIMAGE_BACK, /* PRIMTOLODR (actually means LODRTOBACK) */
+            BUM_LOADEDIMAGE_BACK, /* PRIMTOGRUB (actually means GRUBTOBACK) */
             BUM_LOADEDIMAGE_BACK, /* ROOTTOBACK */
-            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOLODR <This is an error> */
-            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOLODR <This is an error> */
+            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOGRUB <This is an error> */
+            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOGRUB <This is an error> */
         };
 
 static CHAR16* BUM_LOADEDIMAGE_TYPE_TEXT[BUM_LOADEDIMAGE_TYPE_COUNT]
@@ -67,19 +67,19 @@ static CHAR16* BUM_LOADEDIMAGE_TYPE_TEXT[BUM_LOADEDIMAGE_TYPE_COUNT]
 #define ROOT_BUMLOG_PATH    L"\\root\\log"
 
 /* Load path compare strings for boot from "primary" directory.
- *  Boot loader can mix forward slash and back slash in chainloader so check 2 types.
+ *  Grub can mix forward slash and back slash in chainloader so check 2 types.
  */
 #define PRIMARY_BUM_PATH   L"\\primary\\bootx64.efi"
 #define PRIMARY_BUMLOG_PATH   L"\\primary\\log"
-#define PRIMARY_LODR_PATH  L"\\primary\\loaderx64.efi"
+#define PRIMARY_GRUB_PATH  L"\\primary\\grubx64.efi"
 #define PRIMARY_KEYDIR_PATH  L"\\primary\\keys"
 
 /* Load path compare strings for boot from "backup" directory.
- *  Boot loader can mix forward slash and back slash in chainloader so check 2 types.
+ *  Grub can mix forward slash and back slash in chainloader so check 2 types.
  */
 #define BACKUP_BUM_PATH   L"\\backup\\bootx64.efi"
 #define BACKUP_BUMLOG_PATH   L"\\backup\\log"
-#define BACKUP_LODR_PATH  L"\\backup\\loaderx64.efi"
+#define BACKUP_GRUB_PATH  L"\\backup\\grubx64.efi"
 #define BACKUP_KEYDIR_PATH  L"\\backup\\keys"
 
 /* - key-update mechanism is a mail-box mechanism
@@ -1077,13 +1077,13 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         case BUM_LOADEDIMAGE_PRIM:
             /*  This is the primary UEFI application. */
             /*  Try to load the keys from the primary directory and boot the
-                primary boot-loader image. Since we are launching the boot loader,
-                set boot status. */
+                primary GRUB image. Since we are launching GRUB, set boot
+                status. */
             FuncStatus = BUM_loadKeysSetStateBootImage( PRIMARY_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_PRIMTOLODR,
-                                                    PRIMARY_LODR_PATH, TRUE );
+                                                    BUM_LOADEDIMAGE_PRIMTOGRUB,
+                                                    PRIMARY_GRUB_PATH, TRUE );
             if( EFI_ERROR (FuncStatus) ){
-                /*  Failed to boot the primary boot-loader image. */
+                /*  Failed to boot the primary GRUB image. */
                 /*  Try to boot the backup UEFI application without
                     loading keys or setting boot status. */
                 FuncStatus = BUM_loadKeysSetStateBootImage( NULL,
@@ -1111,13 +1111,13 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         case BUM_LOADEDIMAGE_BACK:
             /*  This is the backup UEFI application. */
             /*  Try to load the keys from the backup directory and boot the
-                backup boot-loader image. Since we are launching the boot loader,
-                boot status. */
+                backup GRUB image. Since we are launching GRUB, set boot
+                status. */
             FuncStatus = BUM_loadKeysSetStateBootImage( BACKUP_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_BACKTOLODR,
-                                                    BACKUP_LODR_PATH, TRUE );
+                                                    BUM_LOADEDIMAGE_BACKTOGRUB,
+                                                    BACKUP_GRUB_PATH, TRUE );
             if( EFI_ERROR (FuncStatus) ){
-                /* Failed to boot the backup boot-loader image. */
+                /* Failed to boot the backup GRUB image. */
                 BUM_LOG(L"BUM_main: All Backup Load Attempts Failed");
                 BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
                         L" final error value (%d)", FuncStatus);
