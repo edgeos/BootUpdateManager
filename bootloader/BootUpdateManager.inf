@@ -1,6 +1,6 @@
 ## @file
 #
-#  Copyright (c) 2016, General Electric Company. All rights reserved.<BR>
+#  Copyright (c) 2016, 2017 General Electric Company. All rights reserved.<BR>
 #
 ##
 
@@ -21,6 +21,9 @@
 [Sources]
   BootUpdateManager.c
   __BootUpdateManager.h
+  BUMState.c
+  BUMState.h
+  __BUMState.h
   BootStat.c
   BootStat.h
   __BootStat.h
