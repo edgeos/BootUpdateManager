@@ -1,0 +1,10 @@
+FROM ARG_FROM
+
+MAINTAINER Rob Fisher <rob.fisher@ge.com>
+
+ADD bin/ARG_ARCH/ARG_NAME /TARGET_NAME
+
+RUN RUN_CMD
+
+USER nobody:nobody
+ENTRYPOINT ["/TARGET_NAME"]

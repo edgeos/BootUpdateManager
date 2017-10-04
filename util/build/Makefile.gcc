@@ -1,0 +1,49 @@
+SHELL=/bin/bash
+
+# These should be set through the top-level Makefile
+NAME ?= my-c-app
+SRC_DIRS ?= src
+ARCH ?= amd64
+
+# Generated output directory structure
+output_directory = bin
+arch_dir=$(output_directory)/$(ARCH)
+bin_target = $(arch_dir)/$(NAME)
+
+
+# The source files to watch for changes
+source_files ?= $(shell find $(SRC_DIRS) -type f -name "*.c" | tr '\n' ' ')
+
+# The header files to watch for changes
+header_files ?= $(shell find $(SRC_DIRS) -type f -name "*.h" | tr '\n' ' ')
+header_args ?= $(shell find $(SRC_DIRS) -type d | sed 's/^/-iquote /' | tr '\n' ' ')
+
+
+# Note that build.sh orchestrates the compile type, 
+# so use the variables here for libraries and global 
+# configuration needed regardless of compile type. 
+
+# Put any non linking GCC flags here
+cc_flags += 
+# Put any libraries that need to be linked to here.
+ld_flags += 
+# Placeholder for post-build steps
+post_build+=
+
+CC ?= gcc
+
+all: $(bin_target)
+
+$(bin_target): $(source_files) $(header_files) $(output_directory)
+	$(CC) $(cc_flags) $(header_args) $(source_files) $(ld_flags) 
+	$(post_build)
+
+$(output_directory):
+	-mkdir -p $(output_directory)
+
+run: $(bin_target)
+	$(bin_target)
+
+clean:
+	rm -f $(bin_target)
+
