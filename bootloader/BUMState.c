@@ -49,8 +49,7 @@ static VOID BUMState_SetSum(IN  BUM_state_t *state_p)
 #define BUMState_SumValid(state_p) (0 == BUMState_GetSum(state_p))
 
 EFI_STATUS BUMState_Init(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                            IN  CHAR8               *Config,
-                            IN  UINT64              AttemptCount)
+                            IN  CHAR8               *Config)
 {
     EFI_STATUS ret;
     BUM_state_t state;
@@ -68,9 +67,12 @@ EFI_STATUS BUMState_Init(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
     state.StateSize = sizeof(BUM_state_t);
     state.Version   = BUMSTATE_VERSION;
     /* state.Flags.raw = 0 */;
-    /*  Always initializing to an unsafe boot state, so we're in alternate */
+    /*  Always initializing to an unsafe boot state
+            so we're in alternate
+            and attempt count is 0
+    */
     state.Flags.CurrConfig  = BUMSTATE_CONFIG_ALTR;
-    state.DfltAttemptCount  = AttemptCount;
+    state.DfltAttemptCount  = 0;
     /* state.DfltConfig[128] = {0}; */
     ret = CopyConfig(state.AltrConfig, Config);
     if(EFI_ERROR(ret))

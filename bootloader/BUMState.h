@@ -33,8 +33,7 @@ typedef struct {
 } BUM_state_t;
 
 EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                IN  CHAR8               *Config,
-                                IN  UINT64              AttemptCount);
+                                IN  CHAR8               *Config);
 
 EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
                                 OUT BUM_state_t         **BUM_state_pp);
