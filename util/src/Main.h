@@ -1,3 +1,0 @@
-/*
- * Test Header file
- */

@@ -19,9 +19,6 @@
 ### Customize  these variables
 ###
 
-# The binary to build (just the basename, path and extensions autgenerated).
-NAME := my-c-app
-
 # Where to push the docker image.
 REGISTRY ?= registry.gear.ge.com/predix_edge
 
@@ -35,7 +32,7 @@ VERSION := 1.0.0
 # A name to give your build image. 
 # Dockerfile.build defines how to build the image,
 # and the `build-env` rule builds it.
-BUILD_IMAGE ?= $(NAME)-builder-c-$(ARCH)
+BUILD_IMAGE ?= bum-builder-c-$(ARCH)
 
 # Name of Coverity Conneect stream under Predix Edge project.
 # Contact edge.appdevdevops@ge.com to create a new stream for your project.
@@ -60,7 +57,7 @@ PROXY_ARGS := -e http_proxy=$(http_proxy) -e https_proxy=$(https_proxy) -e no_pr
 BUILD_ARGS := --build-arg http_proxy=$(http_proxy) --build-arg https_proxy=$(https_proxy) --build-arg no_proxy=$(no_proxy)
 
 # directories which hold app source (not vendored)
-SRC_DIRS := src
+SRC_DIRS := bootloader utils
 
 TEST_DIRS := test # directories which hold test source
 
@@ -152,12 +149,12 @@ bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
 		-v $$(pwd):/home/edge/$(NAME)           \
 		-w /home/edge/$(NAME)                   \
 		-e ARCH=$(ARCH)                         \
-		-e VERSION=$(VERSION)                   \
-		-e NAME=$(NAME)                         \
-		-e SRC_DIRS=$(SRC_DIRS)                 \
+#		-e VERSION=$(VERSION)                   \
+#		-e NAME=$(NAME)                         \
+#		-e SRC_DIRS=$(SRC_DIRS)                 \
 		-e BUILD_TYPE=$(BUILD_TYPE)             \
 		$(BUILD_IMAGE)                          \
-		/bin/sh -c "                            \
+		/bin/bash -c "                          \
 		./build/build.sh                        \
 		"
 
@@ -172,7 +169,7 @@ build-shell: bin/$(ARCH) .image-$(BUILD_IMAGE)
 		-v $$(pwd):/home/edge/$(NAME)           \
 		-w /home/edge/$(NAME)                   \
 		$(BUILD_IMAGE)                          \
-		/bin/sh
+		/bin/bash
 
 # Creates contianer to build code
 build-env: .image-$(BUILD_IMAGE)
@@ -197,7 +194,7 @@ image: .image-$(DOTFILE_IMAGE) image-name
 	@./build/dockerfile_autogen.sh \
 		--build-type $(BUILD_TYPE) \
 		--arch $(ARCH) \
-		--name $(NAME) \
+#		--name $(NAME) \
 		--baseimage $(BASEIMAGE) \
 		--version $(VERSION)
 	@docker build -t $(IMAGE):$(VERSION) -f .dockerfile-$(ARCH) .
@@ -223,7 +220,7 @@ test: bin/$(ARCH) .image-$(BUILD_IMAGE)
 	    -v $$(pwd):/home/edge/$(NAME)           \
 	    -w /home/edge/$(NAME)                   \
 	    $(BUILD_IMAGE)                          \
-	    /bin/sh -c "                            \
+	    /bin/bash -c "                          \
 	        ./test/test.sh $(TEST_DIRS)         \
 	    "
 # Execute static analysis. 
@@ -247,7 +244,7 @@ ifeq ($(THISISJENKINS),YES) # If running on jenkins, then scan with Coverity too
 		-e COVERITY_USER=$(COVERITY_USER)       \
 		-e COVERITY_PASSWORD=$(COVERITY_PASSWORD) \
 		$(BUILD_IMAGE)                          \
-		/bin/sh -c "                            \
+		/bin/bash -c "                          \
 			./test/scan-coverity.sh             \
 			"
 else

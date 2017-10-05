@@ -6,6 +6,10 @@
  *
  * Copyright (c) 2017, General Electric Company. All rights reserved.
  */
+
+/*  Need to include __BUMState.h as <> rather than "" to ensure the correct
+    header file is included when compiling for user space instead of EFI space
+*/
 #include <__BUMState.h>
 
 #define ASTATE_FILENAME L"A.state"

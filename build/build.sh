@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -o errexit
 set -o nounset
@@ -8,22 +8,15 @@ if [ -z "${ARCH}" ]; then
     echo "ARCH must be set"
     exit 1
 fi
-if [ -z "${VERSION}" ]; then
-    echo "VERSION must be set"
-    exit 1
-fi
-if [ -z "${NAME}" ]; then
-    echo "NAME must be set"
-    exit 1
-fi
-if [ -z "${SRC_DIRS}" ]; then
-    echo "SRC_DIRS must be set"
+
+if [ -z "${BUILD_TYPE}" ]; then
+    echo "BUILD_TYPE must be set"
     exit 1
 fi
 
 function ExecutableTarget () {
 
-    export cc_flags='-static -o $(bin_target)'
+    export cc_flags='-Wall -static '
     make -f build/Makefile.gcc
 
 }
@@ -52,27 +45,19 @@ function SharedLib() {
 
 }
 
-function DynamicLib() {
-
-    export cc_flags='-static -o $(bin_target)'
-    export ld_flags='-ldl'
-    make -f build/Makefile.gcc
-
-}
-
 case "$BUILD_TYPE" in
     executable) 
         ExecutableTarget
     ;;
-    static-library) 
-        StaticLib
-    ;;
-    shared-library)
-        SharedLib
-    ;;
-    dynamic-library) 
-        DynamicLib
-    ;;
+#    static-library) 
+#        StaticLib
+#    ;;
+#    shared-library)
+#        SharedLib
+#    ;;
+#    dynamic-library) 
+#        DynamicLib
+#    ;;
     *)
         echo "Usage: $0 {executable|static-library|shared-library|dynamic-library}"
         exit 1
