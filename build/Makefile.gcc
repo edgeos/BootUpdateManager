@@ -29,11 +29,13 @@ bin_targets = $(patsubst %,$(arch_dir)/bumstate-%,$(util_names))
 
 # The source files and header files to watch for changes
 common_source_files =   $(LOADER_DIR)/BUMState.c \
-                        $(UTIL_DIR)/LibCommon.c
+                        $(UTIL_DIR)/LibCommon.c \
+                        $(UTIL_DIR)/EFIGlue.c
 
 common_header_files =   $(UTIL_DIR)/__BUMState.h \
                         $(LOADER_DIR)/BUMState.h \
-                        $(UTIL_DIR)/LibCommon.h
+                        $(UTIL_DIR)/LibCommon.h \
+                        $(UTIL_DIR)/EFIGlue.h
 
 common_depends = $(common_source_files) $(common_header_files) $(arch_dir)
 
