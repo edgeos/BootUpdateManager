@@ -31,13 +31,4 @@ EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL    *dir_p,
                                                 IN VOID*                buffer,
                                                 IN UINTN                buffersize );
 
-/*  Time-stamp counter */
-#if defined(_MSC_VER)
-    /*  the following include appears to be implicit
-        (e.g. __rdtsc() intrinsic is just supported in MSVC ). */
-    /*#include <intrin.h>*/
-#elif defined(__GNUC__)
-    #include <x86intrin.h>
-#endif
-
 #endif

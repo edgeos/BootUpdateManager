@@ -164,8 +164,8 @@ static UINT32 BUM_KEYUPDATE_ATTRIBUTE_LIST[BUM_KEYUPDATE_TYPE_COUNT] =
 #define BUM_LOG( format, ... ) LogPrint( &logstate, format, ##__VA_ARGS__ )
 
 /* (un|)comment the following to (en|dis)able TSC-based timing of the
-   SetVariable operation */
-#define BUM_TIME_KEYLOAD
+   SetVariable operation
+#define BUM_TIME_KEYLOAD */
 
 /******************************************************************************/
 /*  Global Variables                                                          */
@@ -584,7 +584,7 @@ static EFI_STATUS BUM_loadKeyFromFile(  BUM_KEYUPDATE_TYPE_t updateType,
             call */
         UINT64  StartTSC, TSCElapsed;
 
-        StartTSC = __rdtsc();
+        StartTSC = AsmReadTsc();
 #endif
     /* SetVar with the read buffer */
     Status = gRT->SetVariable(  BUM_KEYUPDATE_VAR_NAMES[updateType],
@@ -592,7 +592,7 @@ static EFI_STATUS BUM_loadKeyFromFile(  BUM_KEYUPDATE_TYPE_t updateType,
                                 BUM_KEYUPDATE_ATTRIBUTE_LIST[updateType],
                                 KeyFileBufferSize, KeyFileBuffer);
 #ifdef BUM_TIME_KEYLOAD
-        TSCElapsed = __rdtsc() - StartTSC;
+        TSCElapsed = AsmReadTsc() - StartTSC;
 #endif
 
     if( EFI_ERROR(Status) ){

@@ -38,7 +38,7 @@ static EFI_STATUS BootStat_TimeStamp( void )
 
     UINTN Printed;
 
-    TimeStamp_TSC = __rdtsc();
+    TimeStamp_TSC = AsmReadTsc();
 
     /* Get the current time */
     Status = gRT->GetTime( &TimeStamp, NULL );

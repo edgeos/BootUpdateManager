@@ -340,7 +340,7 @@ UINTN EFIAPI LogPrint(  IN LogPrint_state_t *statep,
         return 0;
 
     /* Get the TSC time stamp time */
-    TimeStamp_TSC = __rdtsc();
+    TimeStamp_TSC = AsmReadTsc();
 
     /* Get the current time */
     Status = gRT->GetTime( &TimeStamp, NULL );
