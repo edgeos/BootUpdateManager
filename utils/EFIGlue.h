@@ -13,6 +13,7 @@
 typedef void                VOID;
 typedef uint64_t            UINT64;
 typedef uint32_t            UINT32;
+typedef uint8_t             UINT8;
 typedef char16_t            CHAR16;
 typedef char                CHAR8;
 typedef unsigned long       UINTN;
@@ -31,7 +32,9 @@ static inline EFI_FILE_PROTOCOL *GetDirFileProtocol(char* dir_p)
 
 #define EFI_SUCCESS             (0)
 #define EFI_GENERIC_ERROR       (0xFFFFFFFFFFFFFFFF)
+#define EFI_LOAD_ERROR          EFI_GENERIC_ERROR
 #define EFI_INVALID_PARAMETER   EFI_GENERIC_ERROR
+#define EFI_NOT_FOUND           EFI_GENERIC_ERROR
 #define EFI_ERROR(stat)         (EFI_SUCCESS != stat)
 
 UINTN EFIAPI AsciiStrnLenS( IN CONST CHAR8  *String,
