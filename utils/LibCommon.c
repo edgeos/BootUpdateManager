@@ -98,3 +98,94 @@ exit0:
     return ret;
 }
 
+static long fsize( FILE* filep )
+{
+    long saved_file_pos, size = -1;
+    int ret;
+    saved_file_pos = ftell(filep);
+    if( saved_file_pos >= 0 ){
+        ret = fseek(filep, 0, SEEK_END);
+        if(ret == 0){
+            size = ftell(filep);
+            ret = fseek(filep, saved_file_pos, SEEK_SET);
+            size = (ret == 0)? size : -1;
+        }
+    }
+    return size;
+}
+
+static EFI_STATUS Common_ReadFile(  FILE*       filep,
+                                    VOID*       *buffer_p,
+                                    UINTN       *buffersize_p)
+{
+    EFI_STATUS ret;
+    long filesize;
+    VOID *buffer;
+    size_t read;
+    /*  Get file size. */
+    filesize = fsize(filep);
+    if(filesize <= 0)
+        ret = EFI_GENERIC_ERROR;
+    else{
+        /*  Allocate buffer. */
+        buffer = malloc(filesize);
+        if(NULL == buffer)
+            ret = EFI_GENERIC_ERROR;
+        else{
+            /*  Read the file */
+            read = fread(buffer, 1, filesize, filep);
+            if(read < filesize){
+                /*  Free the buffer in case of failure */
+                free(buffer);
+                ret = EFI_GENERIC_ERROR;
+            }else{
+                /*  Set output variables */
+                *buffer_p = buffer;
+                *buffersize_p = (UINTN)filesize;
+                ret = EFI_SUCCESS;
+            }
+        }
+    }
+    return ret;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN EFI_FILE_PROTOCOL    *dir_p,
+                                            IN CHAR16               *filename,
+                                            IN VOID*                *buffer_p,
+                                            IN UINTN                *buffersize_p )
+{
+    EFI_STATUS ret;
+    char *fullpath;
+    FILE *filep;
+    /*  Form the file path */
+    fullpath = formfilepath((char*)dir_p, filename);
+    if(NULL == fullpath){
+        ret = EFI_GENERIC_ERROR;
+        goto exit0;
+    }
+    /*  Open the file for reading */
+    filep = fopen(fullpath, "r");
+    if(NULL == filep){
+        ret = EFI_GENERIC_ERROR;
+        goto exit1;
+    }
+    /*  Read the file */
+    ret = Common_ReadFile( filep,
+                           buffer_p,
+                           buffersize_p);
+    /*  Close the file */
+    fclose(filep);
+    /*  Free the file path */
+exit1:
+    free(fullpath);
+exit0:
+    return ret;
+}
+
+EFI_STATUS EFIAPI Common_FreeReadBuffer(IN VOID*    buffer_p,
+                                        IN UINTN    buffersize)
+{
+    free(buffer_p);
+    return EFI_SUCCESS;
+}
+
