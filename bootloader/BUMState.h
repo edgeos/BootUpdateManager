@@ -41,6 +41,8 @@ EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
 EFI_STATUS EFIAPI BUMState_Put( IN  EFI_FILE_PROTOCOL   *BootStatDir,
                                 IN  BUM_state_t         *BUM_state_p);
 
+EFI_STATUS EFIAPI BUMState_Free(IN  BUM_state_t *BUM_state_p);
+
 EFI_STATUS EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p);
 
 EFI_STATUS EFIAPI BUMStateNext_RunTimeInit( IN  BUM_state_t *BUM_state_p);

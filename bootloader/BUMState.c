@@ -46,10 +46,10 @@ static VOID BUMState_SetSum(IN  BUM_state_t *state_p)
     state_p->Checksum = -sum;
 }
 
-#define BUMState_SumValid(state_p) (0 == BUMState_GetSum(state_p))
+#define BUMState_SumInvalid(state_p) (0 != BUMState_GetSum(state_p))
 
-EFI_STATUS BUMState_Init(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                            IN  CHAR8               *Config)
+EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
+                                IN  CHAR8               *Config)
 {
     EFI_STATUS ret;
     BUM_state_t state;
@@ -88,9 +88,135 @@ exit0:
     return ret;
 }
 
+static EFI_STATUS BUMState_ParseFile(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
+                                        IN  CHAR16              *FileName,
+                                        OUT BUM_state_t         **BUM_state_pp)
+{
+    EFI_STATUS ret;
+    VOID    *buffer;
+    UINTN   buffer_size;
+    BUM_state_t *BUM_state_p;
+    /*  Read the file */
+    ret = Common_OpenReadCloseFile( BootStatDir,
+                                    FileName,
+                                    &buffer,
+                                    &buffer_size );
+    if(EFI_ERROR(ret))
+        goto exit0;
+    /*  Check the size */
+    BUM_state_p = (BUM_state_t*)buffer;
+    if(buffer_size != BUM_state_p->StateSize){
+        ret = EFI_LOAD_ERROR;
+        goto exit1;
+    }
+    /*  Check the checksum */
+    if(BUMState_SumInvalid(BUM_state_p)){
+        ret = EFI_LOAD_ERROR;
+        goto exit1;
+    }
+    /*  May need to check version number in the future. We're good for now. */
+    ret = EFI_SUCCESS;
+exit1:
+    if(EFI_ERROR(ret)){
+        /*  Free the buffer on error */
+        Common_FreeReadBuffer(  buffer,
+                                buffer_size);
+    }else{
+        /*  Set the output buffer */
+        *BUM_state_pp = BUM_state_p;
+    }
+exit0:
+    return ret;
+}
+
+typedef struct {
+    BUM_state_t *state[2];
+    UINT8       curr;
+    UINT8       next;
+    #define BUMSTATE_A_IDX (0)
+    #define BUMSTATE_B_IDX (1)
+} BUM_state_pair_t;
+
+#define BUMStatePair_Invalid(pair)  (((pair)->state[BUMSTATE_A_IDX] == NULL)\
+                                    && ((pair)->state[BUMSTATE_B_IDX] == NULL))
+
+static VOID BUMStatePair_Get(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
+                                OUT BUM_state_pair_t    *BUM_state_pair_p)
+{
+    EFI_STATUS ret;
+    /*  Get A.state */
+    ret = BUMState_ParseFile(   BootStatDir,
+                                ASTATE_FILENAME,
+                                &(BUM_state_pair_p->state[BUMSTATE_A_IDX]));
+    if(EFI_ERROR(ret))
+        BUM_state_pair_p->state[BUMSTATE_A_IDX] = NULL;
+    /*  Get B.state */
+    ret = BUMState_ParseFile(   BootStatDir,
+                                BSTATE_FILENAME,
+                                &(BUM_state_pair_p->state[BUMSTATE_B_IDX]));
+    if(EFI_ERROR(ret))
+        BUM_state_pair_p->state[BUMSTATE_B_IDX] = NULL;
+    /*  Set curr and next */
+    if(NULL == BUM_state_pair_p->state[BUMSTATE_A_IDX]){
+        if(NULL == BUM_state_pair_p->state[BUMSTATE_B_IDX]){
+            /*  Neither state files is valid */
+            BUM_state_pair_p->curr = BUMSTATE_A_IDX;
+            BUM_state_pair_p->next = BUMSTATE_A_IDX;
+        }else{
+            /*  Only the B state file is valid */
+            BUM_state_pair_p->curr = BUMSTATE_B_IDX;
+            BUM_state_pair_p->next = BUMSTATE_A_IDX;
+        }
+    }else{
+        if(NULL == BUM_state_pair_p->state[BUMSTATE_B_IDX]){
+            /*  Only the A state file is valid */
+            BUM_state_pair_p->curr = BUMSTATE_A_IDX;
+            BUM_state_pair_p->next = BUMSTATE_B_IDX;
+        }else{
+            /*  Both A and B state files valid */
+            UINT64 Acounter =
+                BUM_state_pair_p->state[BUMSTATE_A_IDX]->StateUpdateCounter;
+            UINT64 Bcounter =
+                BUM_state_pair_p->state[BUMSTATE_B_IDX]->StateUpdateCounter;
+            if(Acounter < Bcounter){
+                /* B state file is newer than A state file */
+                BUM_state_pair_p->curr = BUMSTATE_B_IDX;
+                BUM_state_pair_p->next = BUMSTATE_A_IDX;
+            }else{
+                /* B state file is not newer than A state file */
+                BUM_state_pair_p->curr = BUMSTATE_A_IDX;
+                BUM_state_pair_p->next = BUMSTATE_B_IDX;
+            }
+        }
+    }
+}
+
+EFI_STATUS EFIAPI BUMState_Free(IN  BUM_state_t *BUM_state_p)
+{
+    /*  Free the buffer on error */
+    return  Common_FreeReadBuffer(  (VOID*)BUM_state_p,
+                                    BUM_state_p->StateSize);
+}
+
+EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
+                                OUT BUM_state_t         **BUM_state_pp)
+{
+    EFI_STATUS ret;
+    BUM_state_pair_t    BUM_state_pair;
+    BUMStatePair_Get(   BootStatDir,
+                        &BUM_state_pair);
+    if(BUMStatePair_Invalid(&BUM_state_pair)){
+        ret = EFI_NOT_FOUND;
+    }else{
+        *BUM_state_pp = BUM_state_pair.state[BUM_state_pair.curr];
+        if(NULL != BUM_state_pair.state[BUM_state_pair.next])
+            BUMState_Free(BUM_state_pair.state[BUM_state_pair.next]);
+        ret = EFI_SUCCESS;
+    }
+    return ret;
+}
+
 #if 0
-EFI_STATUS BUMState_Get(    IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                            OUT BUM_state_t         **BUM_state_pp);
 
 EFI_STATUS BUMState_Put(IN  EFI_FILE_PROTOCOL   *BootStatDir,
                         IN  BUM_state_t         *BUM_state_p);
