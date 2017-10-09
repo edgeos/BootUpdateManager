@@ -268,7 +268,9 @@ VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
     if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig){
         /*  tmp = AltrConfig*/
         CopyConfig(tmp, BUM_state_p->AltrConfig);
+        /*  AltrConfig = DfltConfig */
         CopyConfig(BUM_state_p->AltrConfig, BUM_state_p->DfltConfig);
+        /*  DfltConfig = tmp */
         CopyConfig(BUM_state_p->DfltConfig, tmp);
         /*  CurrConfig = Alternate*/
         BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
@@ -276,13 +278,36 @@ VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
     BUM_state_p->DfltAttemptCount = 0;
 }
 
+EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
+                                        IN  UINTN       AttemptCount,
+                                        IN  CHAR8       *UpdateConfig)
+{
+    EFI_STATUS ret;
+    /*  Only do the update if we are currently in AltrConfig */
+    if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig){
+        /*  The update operation modifies the default.
+            The current configurtaion is default.
+            It's not safe to modify the current configuration.
+            Return error. */
+        ret = EFI_INVALID_PARAMETER;
+        goto exit0;
+    }
+    BUM_state_p->DfltAttemptCount   = AttemptCount;
+    BUM_state_p->Flags.UpdateAttempt= 1;
+    /*  DfltConfig = UpdateConfig */
+    if(NULL != UpdateConfig)
+        ret = CopyConfig(BUM_state_p->DfltConfig, UpdateConfig);
+    else
+        ret = EFI_SUCCESS;
+exit0:
+    return ret;
+}
+
 #if 0
 
 EFI_STATUS BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p);
 
 EFI_STATUS BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p);
-
-EFI_STATUS BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p);
 
 EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
                                         IN  UINTN       AttemptCount,
