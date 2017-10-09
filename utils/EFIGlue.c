@@ -27,4 +27,10 @@ VOID* EFIAPI ZeroMem(   OUT VOID    *Buffer,
     return Buffer;
 }
 
+INTN EFIAPI CompareMem( IN CONST VOID  *DestinationBuffer,
+                        IN CONST VOID  *SourceBuffer,
+                        IN UINTN       Length)
+{
+    return (INTN)memcmp(DestinationBuffer, SourceBuffer, (size_t)Length);
+}
 
