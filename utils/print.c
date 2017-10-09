@@ -24,8 +24,10 @@ void BUMState_Print(BUM_state_t *BUM_state_p,
         printf("Yes\n");
     else
         printf("No\n");
-    printf("        Default Attempts Rem.:  %" PRIu64 "\n",
+    printf("        Default Attempt Count:  %" PRIu64 "\n",
             BUM_state_p->DfltAttemptCount);
+    printf("        Default Attempts Rem.:  %" PRIu64 "\n",
+            BUM_state_p->DfltAttemptsRemaining);
     printf("        Default Configurtaion:      \"%s\"\n",
             BUM_state_p->DfltConfig);
     printf("        Alternate Configurtaion:    \"%s\"\n",
