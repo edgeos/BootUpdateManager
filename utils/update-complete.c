@@ -56,31 +56,50 @@ exit0:
     return ret;
 }
 
-static int strtou64_strict( char        *str,
-                            uint64_t    *value_p)
+static int validateargs(char        *attemptcount_str,
+                        char        *updateconfig,
+                        uint64_t    *attemptcount_p)
 {
     size_t len;
     int ret;
     char *endptr;
-    unsigned long long value;
-    len = strlen(str);
-    if(len == 0){
-        fprintf(stderr, "    strtou64_strict: non-empty string expected\n");
+    unsigned long long attemptcount;
+    /*  Check the attempt count*/
+    len = strlen(attemptcount_str);
+    if(0 == len){
+        fprintf(stderr, "    validateargs: "\
+                        "attempt count can not be an empty string\n");
         ret = -1;
     }else{
         errno = 0;
-        value = strtoull(str, &endptr, 0);
+        attemptcount = strtoull(attemptcount_str, &endptr, 0);
         if(0 != errno){
-            perror("    strtou64_strict: strtoull failed");
+            perror( "    validateargs: "\
+                    "strtoull failed for attempt count");
             ret = -1;
         }else{
             if('\0' != *endptr){
-                fprintf(stderr, "    strtou64_strict: "\
-                                "string contains non-digit characters\n");
+                fprintf(stderr, "    validateargs: "\
+                                "attempt count contains non-digit characters\n");
                 ret = -1;
             }else{
-                *value_p = (uint64_t)value;
-                ret = 0;
+                if(0 == attemptcount){
+                    fprintf(stderr, "    validateargs: "\
+                                    "attempt count must be greater than zero\n");
+                    ret = -1;
+                }else{
+                    /*  Check the new-configuration name */
+                    len = strlen(updateconfig);
+                    if(0 == len){
+                        fprintf(stderr, "    validateargs: "\
+                                        "new configuration name must be"\
+                                        "a non-empty string.\n");
+                        ret = -1;
+                    }else{
+                        *attemptcount_p = (uint64_t)attemptcount;
+                        ret = 0;
+                    }
+                }
             }
         }
     }
@@ -88,29 +107,29 @@ static int strtou64_strict( char        *str,
 }
 
 static const char *usage =  "<BUM status directory> <default attempt count> "\
-                            "[<new configuration>]";
+                            "<new configuration>";
 
 int main(int argc, char** argv)
 {
     int ret;
-    uint64_t attemptcount;
+    char *statusdir_str;
+    char *attemptcount_str;
     char *updateconfig;
-    if((argc < 3) || (argc > 4)){
+    uint64_t attemptcount;
+    if(argc != 4){
         fprintf(stderr, "Usage: %s %s\n", argv[0], usage);
         ret = -1;
     }else{
-        /*  Check if the (optional) new-configuration name is present */
-        if(4 == argc)
-            updateconfig = argv[3];
-        else
-            updateconfig = NULL;
-        /*  Parse the attempt count */
-        ret = strtou64_strict( argv[2],
-                               &attemptcount);
-        if(0 != ret){
-            fprintf(stderr, "    strtou64_strict failed\n");
-        }else{
-            ret = updateComplete(   argv[1],
+        statusdir_str = argv[1];
+        attemptcount_str = argv[2];
+        updateconfig = argv[3];
+        ret = validateargs( attemptcount_str,
+                            updateconfig,
+                            &attemptcount);
+        if(0 != ret)
+            fprintf(stderr, "    validateargs failed\n");
+        else{
+            ret = updateComplete(   statusdir_str,
                                     attemptcount,
                                     updateconfig);
             if(0 != ret)
