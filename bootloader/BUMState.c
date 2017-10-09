@@ -83,7 +83,7 @@ EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
     ret = Common_CreateWriteCloseFile(  BootStatDir,
                                         ASTATE_FILENAME,
                                         (VOID*)&state,
-                                        sizeof(state));
+                                        state.StateSize);
 exit0:
     return ret;
 }
@@ -216,10 +216,67 @@ EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
     return ret;
 }
 
-#if 0
-
 EFI_STATUS BUMState_Put(IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                        IN  BUM_state_t         *BUM_state_p);
+                        IN  BUM_state_t         *new_state_p)
+{
+    EFI_STATUS ret;
+    /*  Get the state pair */
+    BUM_state_pair_t BUM_state_pair;
+    BUM_state_t *cur_state_p;
+    CHAR16 *filename;
+    BUMStatePair_Get(   BootStatDir,
+                        &BUM_state_pair);
+    if(BUMStatePair_Invalid(&BUM_state_pair)){
+        ret = EFI_NOT_READY;
+        goto exit0;
+    }
+    cur_state_p = BUM_state_pair.state[BUM_state_pair.curr];
+    new_state_p->StateUpdateCounter = cur_state_p->StateUpdateCounter;
+    /*  Check if the new next state and the current state are equal */
+    if(new_state_p->StateSize == cur_state_p->StateSize){
+        new_state_p->Checksum = cur_state_p->Checksum;
+        if(0 == CompareMem(new_state_p, cur_state_p, new_state_p->StateSize)){
+            /*  Nothing to write */
+            ret = EFI_SUCCESS;
+            goto exit1;
+        }
+    }
+    /*  Update the counter and checksum of the new next state */
+    new_state_p->StateUpdateCounter++;
+    BUMState_SetSum(new_state_p);
+    /*  Write the new next state */
+    filename =  (BUM_state_pair.next == BUMSTATE_A_IDX)?
+                ASTATE_FILENAME : BSTATE_FILENAME;
+    ret = Common_CreateWriteCloseFile(  BootStatDir,
+                                        filename,
+                                        (VOID*)new_state_p,
+                                        new_state_p->StateSize);
+    /*  return the return value from Common_CreateWriteCloseFile */
+    /*  Free the state pair */
+exit1:
+    if(NULL != BUM_state_pair.state[BUM_state_pair.curr])
+        BUMState_Free(BUM_state_pair.state[BUM_state_pair.curr]);
+    if(NULL != BUM_state_pair.state[BUM_state_pair.next])
+        BUMState_Free(BUM_state_pair.state[BUM_state_pair.next]);
+exit0:
+    return ret;
+}
+
+VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
+{
+    CHAR8 tmp[BUMSTATE_CONFIG_MAXLEN];
+    if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig){
+        /*  tmp = AltrConfig*/
+        CopyConfig(tmp, BUM_state_p->AltrConfig);
+        CopyConfig(BUM_state_p->AltrConfig, BUM_state_p->DfltConfig);
+        CopyConfig(BUM_state_p->DfltConfig, tmp);
+        /*  CurrConfig = Alternate*/
+        BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
+    }
+    BUM_state_p->DfltAttemptCount = 0;
+}
+
+#if 0
 
 EFI_STATUS BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p);
 
