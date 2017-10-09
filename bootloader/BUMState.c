@@ -73,11 +73,12 @@ EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
     */
     state.Flags.CurrConfig  = BUMSTATE_CONFIG_ALTR;
     state.DfltAttemptCount  = 0;
-    /* state.DfltConfig[128] = {0}; */
+    state.DfltAttemptsRemaining = 0;
+    /* state.DfltConfig[128] = {0}; Done by earlier ZeroMem call. */
     ret = CopyConfig(state.AltrConfig, Config);
     if(EFI_ERROR(ret))
         goto exit0;
-    /*  Set state.AtomicityChecksum; */
+    /*  Set state.Checksum; */
     BUMState_SetSum(&state);
     /*  Write to the A.state file */
     ret = Common_CreateWriteCloseFile(  BootStatDir,
@@ -275,7 +276,7 @@ VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
         /*  CurrConfig = Alternate*/
         BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
     }
-    BUM_state_p->DfltAttemptCount = 0;
+    BUM_state_p->DfltAttemptsRemaining = 0;
 }
 
 EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
@@ -292,13 +293,11 @@ EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
         ret = EFI_INVALID_PARAMETER;
         goto exit0;
     }
-    BUM_state_p->DfltAttemptCount   = AttemptCount;
+    BUM_state_p->DfltAttemptCount       = AttemptCount;
+    BUM_state_p->DfltAttemptsRemaining  = AttemptCount;
     BUM_state_p->Flags.UpdateAttempt= 1;
     /*  DfltConfig = UpdateConfig */
-    if(NULL != UpdateConfig)
-        ret = CopyConfig(BUM_state_p->DfltConfig, UpdateConfig);
-    else
-        ret = EFI_SUCCESS;
+    ret = CopyConfig(BUM_state_p->DfltConfig, UpdateConfig);
 exit0:
     return ret;
 }

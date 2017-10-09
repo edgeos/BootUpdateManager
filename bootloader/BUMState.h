@@ -27,6 +27,7 @@ typedef struct {
         UINT64  raw;
     } Flags;
     UINT64  DfltAttemptCount;
+    UINT64  DfltAttemptsRemaining;
     CHAR8   DfltConfig[BUMSTATE_CONFIG_MAXLEN];
     CHAR8   AltrConfig[BUMSTATE_CONFIG_MAXLEN];
     UINT64  Checksum;
