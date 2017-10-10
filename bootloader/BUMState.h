@@ -54,10 +54,12 @@ VOID EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p);
 
 VOID EFIAPI BUMStateNext_RunTimeInit( IN  BUM_state_t *BUM_state_p);
 
-EFI_STATUS EFIAPI BUMState_getCurrConfig(   IN  BUM_state_t *BUM_state_p,
-                                            OUT CHAR8       **CurrConfig_pp);
+EFI_STATUS EFIAPI BUMState_getCurrConfig(
+                        IN  BUM_state_t  *BUM_state_p,
+                        OUT CHAR8        Dst[static BUMSTATE_CONFIG_MAXLEN]);
 
-EFI_STATUS EFIAPI BUMState_getNonCurrConfig(IN  BUM_state_t *BUM_state_p,
-                                            OUT CHAR8       **CurrConfig_pp);
+EFI_STATUS EFIAPI BUMState_getNonCurrConfig(
+                        IN  BUM_state_t *BUM_state_p,
+                        OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN]);
 
 #endif

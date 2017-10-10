@@ -319,20 +319,28 @@ VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
     BUM_state_p->Flags.UpdateAttempt = 0;
 }
 
-#if 0
 
-EFI_STATUS BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p);
+EFI_STATUS BUMState_getCurrConfig(
+                        IN  BUM_state_t  *BUM_state_p,
+                        OUT CHAR8        Dst[static BUMSTATE_CONFIG_MAXLEN])
+{
+    CHAR8 *CurrConfig_p;
+    if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig)
+        CurrConfig_p = BUM_state_p->DfltConfig;
+    else /* BUMSTATE_CONFIG_ALTR == BUM_state_p->Flags.CurrConfig */
+        CurrConfig_p = BUM_state_p->AltrConfig;
+    return CopyConfig(Dst, CurrConfig_p);
+}
 
-EFI_STATUS BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p);
-
-EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
-                                        IN  UINTN       AttemptCount,
-                                        IN  CHAR8       *UpdateConfig);
-
-EFI_STATUS BUMState_getCurrConfig(  IN  BUM_state_t *BUM_state_p,
-                                    OUT CHAR8       **CurrConfig_pp);
-
-EFI_STATUS BUMState_getNonCurrConfig(   IN  BUM_state_t *BUM_state_p,
-                                        OUT CHAR8       **CurrConfig_pp);
-#endif
+EFI_STATUS BUMState_getNonCurrConfig(
+                        IN  BUM_state_t *BUM_state_p,
+                        OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN])
+{
+    CHAR8 *NonCurrConfig_p;
+    if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig)
+        NonCurrConfig_p = BUM_state_p->AltrConfig;
+    else /* BUMSTATE_CONFIG_ALTR == BUM_state_p->Flags.CurrConfig */
+        NonCurrConfig_p = BUM_state_p->DfltConfig;
+    return CopyConfig(Dst, NonCurrConfig_p);
+}
 
