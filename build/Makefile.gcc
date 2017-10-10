@@ -20,7 +20,7 @@ arch_dir=$(output_directory)/$(ARCH)
 #    currconfig-get
 #    noncurrconfig-get
 #
-util_names = init print update-start update-complete boottime-test
+util_names = init print update-start update-complete boottime-test runtime-init
 
 # Build targets:
 #   prepend each target name with $(arch_dir)/bumstate-...
