@@ -149,9 +149,9 @@ bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
 		-v $$(pwd):/home/edge/$(NAME)           \
 		-w /home/edge/$(NAME)                   \
 		-e ARCH=$(ARCH)                         \
-#		-e VERSION=$(VERSION)                   \
-#		-e NAME=$(NAME)                         \
-#		-e SRC_DIRS=$(SRC_DIRS)                 \
+		-e VERSION=$(VERSION)                   \
+		-e NAME=$(NAME)                         \
+		-e SRC_DIRS="$(SRC_DIRS)"               \
 		-e BUILD_TYPE=$(BUILD_TYPE)             \
 		$(BUILD_IMAGE)                          \
 		/bin/bash -c "                          \
