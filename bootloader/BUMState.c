@@ -302,6 +302,16 @@ exit0:
     return ret;
 }
 
+VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
+{
+    if(0 == BUM_state_p->DfltAttemptsRemaining)
+        BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
+    else{
+        BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_DFLT;
+        (BUM_state_p->DfltAttemptsRemaining)--;
+    }
+}
+
 #if 0
 
 EFI_STATUS BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p);

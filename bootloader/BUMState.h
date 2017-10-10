@@ -50,7 +50,7 @@ EFI_STATUS EFIAPI BUMStateNext_CompleteUpdate(  IN  BUM_state_t *BUM_state_p,
                                                 IN  UINT64      AttemptCount,
                                                 IN  CHAR8       *UpdateConfig);
 
-EFI_STATUS EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p);
+VOID EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p);
 
 EFI_STATUS EFIAPI BUMStateNext_RunTimeInit( IN  BUM_state_t *BUM_state_p);
 
