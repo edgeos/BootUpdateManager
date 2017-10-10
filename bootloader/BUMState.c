@@ -312,6 +312,13 @@ VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
     }
 }
 
+VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
+{
+    if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig)
+        BUM_state_p->DfltAttemptsRemaining = BUM_state_p->DfltAttemptCount;
+    BUM_state_p->Flags.UpdateAttempt = 0;
+}
+
 #if 0
 
 EFI_STATUS BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p);
