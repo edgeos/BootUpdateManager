@@ -47,6 +47,14 @@ bin/amd64/bumstate-update-complete test/statusdir/ 3 ""
 
 bin/amd64/bumstate-update-complete test/statusdir/ 3 sda3
 
+bin/amd64/bumstate-currconfig-get
+
+bin/amd64/bumstate-currconfig-get test/statusdir/
+
+bin/amd64/bumstate-noncurrconfig-get
+
+bin/amd64/bumstate-noncurrconfig-get test/statusdir/
+
 set +x
 
 echo "*************************************************************************"
@@ -86,6 +94,14 @@ set +x
 bin/amd64/bumstate-print test/statusdir
 
 set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
+
+set -x
 bin/amd64/bumstate-boottime-test test/statusdir/
 set +x
 
@@ -97,6 +113,14 @@ set +x
 
 bin/amd64/bumstate-print test/statusdir
 
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
+
 echo "*************************************************************************"
 echo "* Failed complete update "
 echo
@@ -106,6 +130,14 @@ bin/amd64/bumstate-update-start test/statusdir
 set +x
 
 bin/amd64/bumstate-print test/statusdir
+
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
 
 set -x
 bin/amd64/bumstate-update-complete test/statusdir/ 2 sda3
@@ -140,6 +172,14 @@ set +x
 
 bin/amd64/bumstate-print test/statusdir
 
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
+
 echo "*************************************************************************"
 echo "* Successful complete update "
 echo
@@ -149,6 +189,14 @@ bin/amd64/bumstate-update-start test/statusdir
 set +x
 
 bin/amd64/bumstate-print test/statusdir
+
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
 
 set -x
 bin/amd64/bumstate-update-complete test/statusdir/ 2 sda3
@@ -169,6 +217,14 @@ set +x
 
 bin/amd64/bumstate-print test/statusdir
 
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
+
 echo "*************************************************************************"
 echo "* Successful reboot without updates "
 echo
@@ -184,6 +240,14 @@ bin/amd64/bumstate-runtime-init test/statusdir/
 set +x
 
 bin/amd64/bumstate-print test/statusdir
+
+set -x
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
+set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
 
 echo "*************************************************************************"
 echo "* Failed reboot without updates "
@@ -217,9 +281,18 @@ set +x
 bin/amd64/bumstate-print test/statusdir
 
 set -x
-rm -rf test/statusdir
+CURRCONFIG=`bin/amd64/bumstate-currconfig-get test/statusdir/`
+NONCURRCONFIG=`bin/amd64/bumstate-noncurrconfig-get test/statusdir/`
 set +x
+bin/amd64/bumstate-print test/statusdir
+echo "    CURRCONFIG    =\"${CURRCONFIG}\""
+echo "    NONCURRCONFIG =\"${NONCURRCONFIG}\""
 
 echo "*************************************************************************"
 echo "**** End tests"
+
+set -x
+rm -rf test/statusdir
+set +x
+
 echo "*************************************************************************"
