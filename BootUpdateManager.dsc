@@ -75,6 +75,8 @@
 
 [Components]
   BootUpdateManager/src/BootUpdateManager.inf
+  BootUpdateManager/src/testpayload/TestPayload.inf
 
 [BuildOptions]
   #*_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
+

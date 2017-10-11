@@ -1,0 +1,52 @@
+## @file
+#
+#  Copyright (c) 2016, 2017 General Electric Company. All rights reserved.<BR>
+#
+##
+
+[Defines]
+  INF_VERSION                    = 0x00010005
+  BASE_NAME                      = TestPayload
+  FILE_GUID                      = 669657e3-4da9-4626-a8ed-bd71460c9481
+  MODULE_TYPE                    = UEFI_APPLICATION
+  VERSION_STRING                 = 1.0
+  ENTRY_POINT                    = TestPayload_main
+
+#
+# The following information is for reference only and not required by the build tools.
+#
+#  VALID_ARCHITECTURES           = IA32 X64 IPF EBC
+#
+
+[Sources]
+  TestPayload.c
+
+[Packages]
+  MdePkg/MdePkg.dec
+  MdeModulePkg/MdeModulePkg.dec
+
+[LibraryClasses]
+  UefiApplicationEntryPoint
+  UefiLib
+  UefiBootServicesTableLib
+  UefiRuntimeServicesTableLib
+  BaseLib
+  DevicePathLib
+  PcdLib
+
+[Protocols]
+  gEfiLoadedImageProtocolGuid                             ## CONSUMES
+  gEfiDevicePathProtocolGuid                              ## CONSUMES
+  gEfiSimpleFileSystemProtocolGuid                        ## CONSUMES
+  gEfiUnicodeCollationProtocolGuid                        ## CONSUMES
+  gEfiUnicodeCollation2ProtocolGuid                       ## CONSUMES
+  gEfiSmbiosProtocolGuid
+
+[Guids]
+  gEfiFileInfoGuid                                        ## CONSUMES
+  gEfiGlobalVariableGuid                                  ## CONSUMES
+  gEfiImageSecurityDatabaseGuid                           ## CONSUMES
+
+[Pcd]
+  gEfiMdePkgTokenSpaceGuid.PcdMaximumUnicodeStringLength  ## CONSUMES
+
