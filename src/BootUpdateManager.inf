@@ -19,23 +19,23 @@
 #
 
 [Sources]
-  BootUpdateManager.c
-  __BootUpdateManager.h
-  BUMState.c
-  BUMState.h
-  __BUMState.h
-  BootStat.c
-  BootStat.h
-  __BootStat.h
-  LibSmBios.c
-  LibSmBios.h
-  __LibSmBios.h
-  LogPrint.c
-  LogPrint.h
-  __LogPrint.h
-  LibCommon.c
-  LibCommon.h
-  __LibCommon.h
+  loader/BootUpdateManager.c
+  loader/__BootUpdateManager.h
+#  common/BUMState.c
+#  common/BUMState.h
+#  loader/__BUMState.h
+  loader/BootStat.c
+  loader/BootStat.h
+  loader/__BootStat.h
+  loader/LibSmBios.c
+  loader/LibSmBios.h
+  loader/__LibSmBios.h
+  loader/LogPrint.c
+  loader/LogPrint.h
+  loader/__LogPrint.h
+  loader/LibCommon.c
+  loader/LibCommon.h
+  loader/__LibCommon.h
 
 [Packages]
   MdePkg/MdePkg.dec
