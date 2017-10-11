@@ -1,9 +1,11 @@
 SHELL=/bin/bash
 
 # These should be set through the top-level Makefile
-UTIL_DIR ?= utils
-LOADER_DIR ?= bootloader
+SRC_DIR ?= src
 ARCH ?= amd64
+
+UTIL_DIR = $(SRC_DIR)/utils
+COMMON_DIR = $(SRC_DIR)/common
 
 # Generated output directory structure
 output_directory = bin
@@ -29,18 +31,18 @@ util_names = init print update-start update-complete boottime-test \
 bin_targets = $(patsubst %,$(arch_dir)/bumstate-%,$(util_names))
 
 # The source files and header files to watch for changes
-common_source_files =   $(LOADER_DIR)/BUMState.c \
+common_source_files =   $(COMMON_DIR)/BUMState.c \
                         $(UTIL_DIR)/LibCommon.c \
                         $(UTIL_DIR)/EFIGlue.c
 
 common_header_files =   $(UTIL_DIR)/__BUMState.h \
-                        $(LOADER_DIR)/BUMState.h \
+                        $(COMMON_DIR)/BUMState.h \
                         $(UTIL_DIR)/LibCommon.h \
                         $(UTIL_DIR)/EFIGlue.h
 
 common_depends = $(common_source_files) $(common_header_files) $(arch_dir)
 
-header_args = -idirafter $(UTIL_DIR) -idirafter $(LOADER_DIR)
+header_args = -iquote $(UTIL_DIR) -iquote $(COMMON_DIR)
 
 # Note that build.sh orchestrates the compile type, 
 # so use the variables here for libraries and global 

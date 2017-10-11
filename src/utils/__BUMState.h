@@ -13,8 +13,8 @@
 #include <stdint.h>
 #include <uchar.h>
 
-#include <EFIGlue.h>
-#include <BUMState.h>
-#include <LibCommon.h>
+#include "EFIGlue.h"
+#include "BUMState.h"
+#include "LibCommon.h"
 
 #endif
