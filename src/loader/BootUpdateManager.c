@@ -1006,24 +1006,111 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR16 *KeyDirPathString, OPT
 /*  Main                                                                      */
 /******************************************************************************/
 
+EFI_STATUS BUM_back_main( VOID )
+{
+    EFI_STATUS ret;
+    /*  Try to load the keys from the backup directory and boot the
+        backup GRUB image. Since we are launching GRUB, set boot
+        status. */
+    ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
+                                        BUM_LOADEDIMAGE_BACKTOGRUB,
+                                        BACKUP_GRUB_PATH, TRUE);
+    if(EFI_ERROR(ret)){
+        /* Failed to boot the backup GRUB image. */
+        BUM_LOG(L"BUM_main: All Backup Load Attempts Failed");
+        BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
+                L" final error value (%d)", ret);
+    }
+    return ret;
+}
+
+EFI_STATUS BUM_prim_main( VOID )
+{
+    EFI_STATUS ret;
+    /*  Try to load the keys from the primary directory and boot the
+        primary GRUB image. Since we are launching GRUB, set boot
+        status. */
+    ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
+                                        BUM_LOADEDIMAGE_PRIMTOGRUB,
+                                        PRIMARY_GRUB_PATH, TRUE);
+    if(EFI_ERROR(ret)){
+        /*  Failed to boot the primary GRUB image. */
+        /*  Try to boot the backup UEFI application without
+            loading keys or setting boot status. */
+        ret = BUM_loadKeysSetStateBootImage(NULL,
+                                            BUM_LOADEDIMAGE_PRIMTOBACK,
+                                            BACKUP_BUM_PATH, FALSE);
+        if(EFI_ERROR(ret)){
+            /* Failed to boot the backup UEFI application. */
+            /* Try to load the keys from the backup directory and
+               attempt the boot again without setting boot status. */
+            ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
+                                                BUM_LOADEDIMAGE_PRIMTOBACK,
+                                                BACKUP_BUM_PATH, FALSE);
+            if(EFI_ERROR(ret)){
+                /* Failed to boot the backup UEFI application. */
+                BUM_LOG(L"BUM_main: All Primary Load Attempts Failed");
+                BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
+                        L" final error value (%d)", ret);
+            }
+        }
+    }
+    return ret;
+}
+
+EFI_STATUS BUM_root_main( VOID )
+{
+    EFI_STATUS ret;
+    /*  Try to boot the primary UEFI application without loading keys
+        or setting boot status.*/
+    ret = BUM_loadKeysSetStateBootImage(NULL,
+                                        BUM_LOADEDIMAGE_ROOTTOPRIM,
+                                        PRIMARY_BUM_PATH, FALSE );
+    if(EFI_ERROR(ret)){
+        /*  Failed to boot the primary UEFI application. */
+        /*  Try to load the keys from the primary directory and attempt
+            the boot again without setting boot status. */
+        ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
+                                            BUM_LOADEDIMAGE_ROOTTOPRIM,
+                                            PRIMARY_BUM_PATH, FALSE );
+        if(EFI_ERROR(ret)){
+            /* Try to boot the backup UEFI application without loading
+               keys or setting boot status. */
+            ret = BUM_loadKeysSetStateBootImage(NULL,
+                                                BUM_LOADEDIMAGE_ROOTTOBACK,
+                                                BACKUP_BUM_PATH, FALSE );
+            if(EFI_ERROR(ret)){
+                /* Failed to boot the backup UEFI application. */
+                /* Try to load the keys from the backup directory and
+                   attempt the boot again without setting boot status.*/
+                ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
+                                                    BUM_LOADEDIMAGE_ROOTTOBACK,
+                                                    BACKUP_BUM_PATH, FALSE );
+                if(EFI_ERROR(ret)){
+                    /* Failed to boot the backup UEFI application. */
+                    BUM_LOG(L"BUM_main: All Root Load Attempts Failed");
+                    BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
+                            L" final error value (%d)", ret);
+                }
+            }
+        }
+    }
+    return ret;
+}
+
 EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
                             IN EFI_SYSTEM_TABLE *SystemTable)
 {
-    EFI_STATUS FuncStatus, AppStatus;
-
-    AppStatus = EFI_SUCCESS;
-
+    EFI_STATUS AppStatus = EFI_SUCCESS;
+    EFI_STATUS FuncStatus;
     /*  Setup initial console-based logging */
     BUM_LogPrint_init( FALSE );
-
     BUM_LOG( L"initializing BUM logging ... " );
-
-    FuncStatus = BUM_init( LoadedImageHandle );
-    if( EFI_ERROR (FuncStatus) ){
+    FuncStatus = BUM_init(LoadedImageHandle);
+    if(EFI_ERROR(FuncStatus)){
         AppStatus = FuncStatus;
         goto exit0;
     }
-
     /*  Log initial information */
     BUM_LOG(L"****************************************"
             L"****************************************" );
@@ -1032,99 +1119,25 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
             L"****************************************" );
     BUM_LOG(L"");
     BUM_LOG(L"    Loaded Image Type: %s",
-                BUM_LOADEDIMAGE_TYPE_TEXT[gLoadedImageType] );
-
-    switch( gLoadedImageType ){
+            BUM_LOADEDIMAGE_TYPE_TEXT[gLoadedImageType] );
+    switch(gLoadedImageType){
         case BUM_LOADEDIMAGE_ROOT:
-            /*  This is the root UEFI application. */
-            /*  Try to boot the primary UEFI application without loading keys
-                or setting boot status.*/
-            FuncStatus = BUM_loadKeysSetStateBootImage( NULL,
-                                                    BUM_LOADEDIMAGE_ROOTTOPRIM,
-                                                    PRIMARY_BUM_PATH, FALSE );
-            if( EFI_ERROR (FuncStatus) ){
-                /*  Failed to boot the primary UEFI application. */
-                /*  Try to load the keys from the primary directory and attempt
-                    the boot again without setting boot status. */
-                FuncStatus = BUM_loadKeysSetStateBootImage( PRIMARY_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_ROOTTOPRIM,
-                                                    PRIMARY_BUM_PATH, FALSE );
-                if( EFI_ERROR (FuncStatus) ){
-                    /* Try to boot the backup UEFI application without loading
-                       keys or setting boot status. */
-                    FuncStatus = BUM_loadKeysSetStateBootImage( NULL,
-                                                    BUM_LOADEDIMAGE_ROOTTOBACK,
-                                                    BACKUP_BUM_PATH, FALSE );
-                    if( EFI_ERROR (FuncStatus) ){
-                        /* Failed to boot the backup UEFI application. */
-                        /* Try to load the keys from the backup directory and
-                           attempt the boot again without setting boot status.*/
-                        FuncStatus = BUM_loadKeysSetStateBootImage(
-                                                    BACKUP_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_ROOTTOBACK,
-                                                    BACKUP_BUM_PATH, FALSE );
-                        if( EFI_ERROR (FuncStatus) ){
-                            /* Failed to boot the backup UEFI application. */
-                            BUM_LOG(L"BUM_main: All Root Load Attempts Failed");
-                            BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                                    L" final error value (%d)", FuncStatus);
-                            AppStatus = FuncStatus;
-                        }
-                    }
-                }
-            }
+            /*  This is the root BUM. */
+            AppStatus = BUM_root_main();
+            BUM_LOG(L"BUM_main: BUM_root_main failed with status (%d)\n",
+                    AppStatus);
             break;
         case BUM_LOADEDIMAGE_PRIM:
             /*  This is the primary UEFI application. */
-            /*  Try to load the keys from the primary directory and boot the
-                primary GRUB image. Since we are launching GRUB, set boot
-                status. */
-            FuncStatus = BUM_loadKeysSetStateBootImage( PRIMARY_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_PRIMTOGRUB,
-                                                    PRIMARY_GRUB_PATH, TRUE );
-            if( EFI_ERROR (FuncStatus) ){
-                /*  Failed to boot the primary GRUB image. */
-                /*  Try to boot the backup UEFI application without
-                    loading keys or setting boot status. */
-                FuncStatus = BUM_loadKeysSetStateBootImage( NULL,
-                                                BUM_LOADEDIMAGE_PRIMTOBACK,
-                                                BACKUP_BUM_PATH, FALSE );
-                if( EFI_ERROR (FuncStatus) ){
-                    /* Failed to boot the backup UEFI application. */
-                    /* Try to load the keys from the backup directory and
-                       attempt the boot again without setting boot status. */
-                    FuncStatus = BUM_loadKeysSetStateBootImage( BACKUP_KEYDIR_PATH,
-                                                BUM_LOADEDIMAGE_PRIMTOBACK,
-                                                BACKUP_BUM_PATH, FALSE );
-                    if( EFI_ERROR (FuncStatus) ){
-                        /* Failed to boot the backup UEFI application. */
-                        BUM_LOG(L"BUM_main: All Primary Load Attempts Failed");
-                        BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                                L" final error value (%d)", FuncStatus);
-                        /*  Set failure code and break out of the switch-case
-                            statement for a clean exit. */
-                        AppStatus = FuncStatus;
-                    }
-                }
-            }
+            AppStatus = BUM_prim_main();
+            BUM_LOG(L"BUM_main: BUM_prim_main failed with status (%d)\n",
+                    AppStatus);
             break;
         case BUM_LOADEDIMAGE_BACK:
             /*  This is the backup UEFI application. */
-            /*  Try to load the keys from the backup directory and boot the
-                backup GRUB image. Since we are launching GRUB, set boot
-                status. */
-            FuncStatus = BUM_loadKeysSetStateBootImage( BACKUP_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_BACKTOGRUB,
-                                                    BACKUP_GRUB_PATH, TRUE );
-            if( EFI_ERROR (FuncStatus) ){
-                /* Failed to boot the backup GRUB image. */
-                BUM_LOG(L"BUM_main: All Backup Load Attempts Failed");
-                BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                        L" final error value (%d)", FuncStatus);
-                /*  Set failure code and break out of the switch-case
-                    statement for a clean exit. */
-                AppStatus = FuncStatus;
-            }
+            AppStatus = BUM_back_main();
+            BUM_LOG(L"BUM_main: BUM_back_main failed with status (%d)\n",
+                    AppStatus);
             break;
         case BUM_LOADEDIMAGE_UNKNOWN:
             BUM_LOG(L"BUM_main: loaded-image type = \"ERROR\"");
@@ -1135,20 +1148,16 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
             AppStatus = EFI_UNSUPPORTED;
             break;
     }
-
     /*  Attempt to set the EFI State Varriable.
         Already in failure mode, so return value doesn't matter. */
-    BUM_setLdImageState( BUM_LOADEDIMAGE_FAIL );
-
-    FuncStatus = BUM_fini( );
-    if( EFI_ERROR (FuncStatus) ){
+    BUM_setLdImageState(BUM_LOADEDIMAGE_FAIL);
+    FuncStatus = BUM_fini();
+    if(EFI_ERROR(FuncStatus)){
         /*  The status error from BUM_fini is only important if there were no
             major previous errors. */
-        if( ! EFI_ERROR (AppStatus) ){
+        if(!EFI_ERROR(AppStatus))
             AppStatus = FuncStatus;
-        }
     }
-
 exit0:
     return EFI_UNSUPPORTED;
 }
