@@ -911,95 +911,136 @@ static EFI_STATUS BUM_fini( void )
 /*  Image-Booting Functions                                                         */
 /******************************************************************************/
 
-static EFI_STATUS EFIAPI BUM_bootImage( IN CHAR16 *imagePathText,
-                                        IN BOOLEAN ReportBootStatus )
+static EFI_STATUS EFIAPI BUM_LoadImage( IN  CHAR16      *ImagePathString,
+                                        OUT EFI_HANDLE  *LoadedImageHandle_p)
 {
-    EFI_STATUS Status;
+    EFI_STATUS ret;
     EFI_DEVICE_PATH_PROTOCOL *imageDPPp;
-    EFI_HANDLE newLoadedImageHandle;
-
-    BUM_LOG(L"    Loading image \"%s\" ... ", imagePathText);
-
+    EFI_HANDLE LoadedImageHandle;
     /* Turn the CHAR16 file path into a popper DevicePathProtocol */
     imageDPPp = FileDevicePath( gLoadedImageProtocol->DeviceHandle,
-                                imagePathText );
-    /*  imagePathText is not NULL and imagePathText should not be mis-aligned.
-        FileDevicePath should return a valid Device-Path Protocol in memory
-        allocated through the EFI boot services. */
-
-    /* Load the image using the DevicePathProtocol */
-    Status = gBS->LoadImage(FALSE, /* Request does not originate from the boot
-                                      manager in the firmware. */
-                            gLoadedImageHandle,
-                            imageDPPp,
-                            NULL, 0, /* There are no images loaded in memory */
-                            &newLoadedImageHandle );
-
-    /* Succeed or fail, the DevicePathProtocol should be freed. */
-    gBS->FreePool( imageDPPp );
-
-    /* Return on failure. */
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_bootImage: gBS->LoadImage failed (%d)", Status);
-        return Status;
+                                ImagePathString);
+    if(NULL == imageDPPp){
+        BUM_LOG(L"BUM_LoadImage: FileDevicePath returned NULL");
+        ret = EFI_OUT_OF_RESOURCES;
+    }else{
+        /* Load the image using the DevicePathProtocol */
+        ret = gBS->LoadImage(   FALSE, /*   Request does not originate from the 
+                                            boot manager in the firmware. */
+                                gLoadedImageHandle,
+                                imageDPPp,
+                                NULL, 0, /* There are no images loaded in
+                                            memory */
+                                &LoadedImageHandle);
+        if(EFI_ERROR(ret))
+            BUM_LOG(L"BUM_LoadImage: gBS->LoadImage returned (%d) ",  ret);
+        else
+            *LoadedImageHandle_p = LoadedImageHandle;
+        /* Succeed or fail, the DevicePathProtocol should be freed. */
+        gBS->FreePool(imageDPPp);
     }
-
-    /* Report Boot Status if requested */
-    if( ReportBootStatus ){
-        Status = BUM_ReportBootStatus();
-        if( EFI_ERROR (Status) )
-            BUM_LOG(L"BUM_bootImage: BUM_ReportBootStatus failed ");
-    }
-
-    BUM_LOG(L"    Starting image ...");
-    Status = gBS->StartImage(newLoadedImageHandle, NULL, NULL);
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_bootImage: gBS->StartImage failed (%d)", Status);
-        return Status;
-    }
-
-    /*  Control will reach here if gBS->StartImage failed or the loaded image
-        exited or returned. Either way, this is a failure. At some stage of
-        the boot, something failed to load. */
-    return EFI_LOAD_ERROR;
+    return ret;
 }
 
-EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR16 *KeyDirPathString, OPTIONAL
+static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR16   *KeyDirPathString,
+                                                IN CHAR16   *ImagePathString,
+                                                IN BOOLEAN  LoadKeysByDefault,
+                                                IN EFI_HANDLE *LoadedImageHandle_p)
+{
+    EFI_STATUS LoadKey_ret, LoadImage_ret;
+    EFI_HANDLE LoadedImageHandle;
+    BUM_LOG(L"    Loading image \"%s\" ... ", ImagePathString);
+    /*  Load keys by default if requested */
+    if(LoadKeysByDefault){
+        LoadKey_ret = BUM_loadKeys(KeyDirPathString);
+        /*  Failure in loading keys is not fatal */
+    }else
+        LoadKey_ret = EFI_SUCCESS;
+    /*  Make first attempt at loading the image */
+    LoadImage_ret = BUM_LoadImage(  ImagePathString,
+                                    &LoadedImageHandle);
+    if(EFI_ERROR(LoadImage_ret)){
+        /*  Check if we already attempted to load keys */
+        if(!LoadKeysByDefault){
+            LoadKey_ret = BUM_loadKeys(KeyDirPathString);
+            if(!EFI_ERROR(LoadKey_ret))
+                LoadImage_ret = BUM_LoadImage(  ImagePathString,
+                                                &LoadedImageHandle);
+        }
+    }
+    if(EFI_ERROR(LoadKey_ret))
+        BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_loadKeys failed for "
+                L"\"%s\"",  KeyDirPathString);
+    if(EFI_ERROR(LoadImage_ret))
+        BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_LoadImage failed for "
+                L"\"%s\"",  ImagePathString);
+    else
+        *LoadedImageHandle_p = LoadedImageHandle;
+    return LoadImage_ret;
+}
+
+static EFI_STATUS EFIAPI BUM_SetStateBootImage( IN EFI_HANDLE LoadedImageHandle,
                                                 IN BUM_LOADEDIMAGE_STATE_t State,
-                                                IN CHAR16 *ImagePathString,
                                                 IN BOOLEAN ReportBootStatus )
 {
-    EFI_STATUS Status, FuncStatus;
-
-    /*  Load keys if a key directory was provided.
-        Even if there are key files present and key-loading is attempted,
-        failing to load keys is not a fatal error and boot should still be
-        attempted.*/
-    if( NULL != KeyDirPathString ){
-        FuncStatus = BUM_loadKeys( KeyDirPathString );
-        if( EFI_ERROR(FuncStatus) )
-            BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_loadKeys failed for "
-                    L"\"%s\"",  KeyDirPathString );
-    }
-
+    EFI_STATUS ret;
     /*  Set the UEFI LdImageState varriable.
         We don't want to load an image without setting the state first since
         the loaded image will not behave correctly without the propper state.
         If we fail to set the state, mark this as a fatal error and abort the
         boot.*/
-    Status = BUM_setLdImageState( State );
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_setLdImageState failed "
-                L"for state %d",  KeyDirPathString );
-        return Status;
+    ret = BUM_setLdImageState( State );
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_SetStateBootImage: BUM_setLdImageState "
+                L"failed (%d) for state %d",  ret, State);
+        /*  FIXME: UnloadImage
+            cleanup_ret = */
+    }else{
+        /* Report Boot Status if requested */
+        if(ReportBootStatus){
+            ret = BUM_ReportBootStatus();
+            if(EFI_ERROR(ret))
+                BUM_LOG(L"BUM_SetStateBootImage: BUM_ReportBootStatus failed");
+        }
+        BUM_LOG(L"    Starting image ...");
+        ret = gBS->StartImage(LoadedImageHandle, NULL, NULL);
+        if(EFI_ERROR(ret)){
+            BUM_LOG(L"BUM_SetStateBootImage: gBS->StartImage failed (%d)", ret);
+        }
     }
+    /*  Control will reach here if gBS->StartImage failed or the loaded image
+        exited or returned. Either way, this is a failure. At some stage of
+        the boot, something failed to load. */
+    return ret;
+}
 
-    /*  Boot the image. */
-    Status = BUM_bootImage( ImagePathString, ReportBootStatus );
-    if( EFI_ERROR (Status) )
-        BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_bootImage failed for "
-                L"\"%s\"", ImagePathString );
-    return Status;
+EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR16 *KeyDirPathString,
+                                                IN CHAR16 *ImagePathString,
+                                                IN BUM_LOADEDIMAGE_STATE_t State,
+                                                IN BOOLEAN LoadKeysByDefault,
+                                                IN BOOLEAN ReportBootStatus )
+{
+    EFI_STATUS ret;
+    EFI_HANDLE LoadedImageHandle;
+    /*  Load images and keys. */
+    ret = BUM_LoadKeyLoadImage( KeyDirPathString,
+                                ImagePathString,
+                                LoadKeysByDefault,
+                                &LoadedImageHandle);
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_LoadKeyLoadImage failed"
+                L"(%d)",  ret);
+
+    }else{
+        /*  Boot the image. */
+        ret = BUM_SetStateBootImage(LoadedImageHandle,
+                                    State,
+                                    ReportBootStatus);
+        if(EFI_ERROR(ret))
+            BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_SetStateBootImage failed"
+                    L"(%d)", ret);
+    }
+    return ret;
 }
 
 /******************************************************************************/
@@ -1013,8 +1054,10 @@ EFI_STATUS BUM_back_main( VOID )
         backup GRUB image. Since we are launching GRUB, set boot
         status. */
     ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
+                                        BACKUP_GRUB_PATH,
                                         BUM_LOADEDIMAGE_BACKTOGRUB,
-                                        BACKUP_GRUB_PATH, TRUE);
+                                        TRUE,
+                                        TRUE);
     if(EFI_ERROR(ret)){
         /* Failed to boot the backup GRUB image. */
         BUM_LOG(L"BUM_back_main: BUM_loadKeysSetStateBootImage "
@@ -1030,8 +1073,10 @@ EFI_STATUS BUM_prim_main( VOID )
         primary GRUB image. Since we are launching GRUB, set boot
         status. */
     ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
+                                        PRIMARY_GRUB_PATH,
                                         BUM_LOADEDIMAGE_PRIMTOGRUB,
-                                        PRIMARY_GRUB_PATH, TRUE);
+                                        TRUE,
+                                        TRUE);
     if(EFI_ERROR(ret)){
         /*  Failed to boot the primary GRUB image. */
         BUM_LOG(L"BUM_prim_main: BUM_loadKeysSetStateBootImage "
@@ -1045,36 +1090,24 @@ EFI_STATUS BUM_root_main( VOID )
     EFI_STATUS ret;
     /*  Try to boot the primary UEFI application without loading keys
         or setting boot status.*/
-    ret = BUM_loadKeysSetStateBootImage(NULL,
+    ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
+                                        PRIMARY_BUM_PATH,
                                         BUM_LOADEDIMAGE_ROOTTOPRIM,
-                                        PRIMARY_BUM_PATH, FALSE );
+                                        FALSE,
+                                        FALSE);
     if(EFI_ERROR(ret)){
-        /*  Failed to boot the primary UEFI application. */
-        /*  Try to load the keys from the primary directory and attempt
-            the boot again without setting boot status. */
-        ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
-                                            BUM_LOADEDIMAGE_ROOTTOPRIM,
-                                            PRIMARY_BUM_PATH, FALSE );
+        /* Try to boot the backup UEFI application without loading
+           keys or setting boot status. */
+        ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
+                                            BACKUP_BUM_PATH,
+                                            BUM_LOADEDIMAGE_ROOTTOBACK,
+                                            FALSE,
+                                            FALSE);
         if(EFI_ERROR(ret)){
-            /* Try to boot the backup UEFI application without loading
-               keys or setting boot status. */
-            ret = BUM_loadKeysSetStateBootImage(NULL,
-                                                BUM_LOADEDIMAGE_ROOTTOBACK,
-                                                BACKUP_BUM_PATH, FALSE );
-            if(EFI_ERROR(ret)){
-                /* Failed to boot the backup UEFI application. */
-                /* Try to load the keys from the backup directory and
-                   attempt the boot again without setting boot status.*/
-                ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
-                                                    BUM_LOADEDIMAGE_ROOTTOBACK,
-                                                    BACKUP_BUM_PATH, FALSE );
-                if(EFI_ERROR(ret)){
-                    /* Failed to boot the backup UEFI application. */
-                    BUM_LOG(L"BUM_main: All Root Load Attempts Failed");
-                    BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                            L" final error value (%d)", ret);
-                }
-            }
+            /* Failed to boot the backup UEFI application. */
+            BUM_LOG(L"BUM_main: All Root Load Attempts Failed");
+            BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
+                    L" final error value (%d)", ret);
         }
     }
     return ret;
