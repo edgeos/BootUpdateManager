@@ -1017,9 +1017,8 @@ EFI_STATUS BUM_back_main( VOID )
                                         BACKUP_GRUB_PATH, TRUE);
     if(EFI_ERROR(ret)){
         /* Failed to boot the backup GRUB image. */
-        BUM_LOG(L"BUM_main: All Backup Load Attempts Failed");
-        BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                L" final error value (%d)", ret);
+        BUM_LOG(L"BUM_back_main: BUM_loadKeysSetStateBootImage "
+                L"failed (%d)", ret);
     }
     return ret;
 }
@@ -1035,25 +1034,8 @@ EFI_STATUS BUM_prim_main( VOID )
                                         PRIMARY_GRUB_PATH, TRUE);
     if(EFI_ERROR(ret)){
         /*  Failed to boot the primary GRUB image. */
-        /*  Try to boot the backup UEFI application without
-            loading keys or setting boot status. */
-        ret = BUM_loadKeysSetStateBootImage(NULL,
-                                            BUM_LOADEDIMAGE_PRIMTOBACK,
-                                            BACKUP_BUM_PATH, FALSE);
-        if(EFI_ERROR(ret)){
-            /* Failed to boot the backup UEFI application. */
-            /* Try to load the keys from the backup directory and
-               attempt the boot again without setting boot status. */
-            ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
-                                                BUM_LOADEDIMAGE_PRIMTOBACK,
-                                                BACKUP_BUM_PATH, FALSE);
-            if(EFI_ERROR(ret)){
-                /* Failed to boot the backup UEFI application. */
-                BUM_LOG(L"BUM_main: All Primary Load Attempts Failed");
-                BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                        L" final error value (%d)", ret);
-            }
-        }
+        BUM_LOG(L"BUM_prim_main: BUM_loadKeysSetStateBootImage "
+                L"failed (%d)", ret);
     }
     return ret;
 }
