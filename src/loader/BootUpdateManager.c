@@ -908,8 +908,114 @@ static EFI_STATUS BUM_fini( void )
 
 
 /******************************************************************************/
-/*  Image-Booting Functions                                                         */
+/*  Image-Booting Functions                                                   */
 /******************************************************************************/
+
+#define KEYDIR_NAME "keys"
+#define PATHLEN_MAX (512)
+
+static EFI_STATUS EFIAPI BUM_GetPathFromParts(  IN  CHAR8   *DirPath,
+                                                IN  CHAR8   *FileName,
+                                                OUT CHAR16  **Path_p)
+{
+    EFI_STATUS ret;
+    UINTN DirPath_len, FileName_len, Path_len;
+    CHAR16 *Path;
+    /*  Get lengths of the two strings to be generated */
+    DirPath_len = AsciiStrnLenS(DirPath, PATHLEN_MAX);
+    FileName_len = AsciiStrnLenS(FileName, PATHLEN_MAX);
+    Path_len = DirPath_len + 1 + FileName_len;
+    if(PATHLEN_MAX < Path_len){
+        BUM_LOG(L"BUM_GetPathFromParts: total path length (%d) too large",
+                Path_len);
+        ret = EFI_UNSUPPORTED;
+        goto exit0;
+    }
+    /*  Allocate space for Path */
+    ret = gBS->AllocatePool(EfiLoaderData,
+                            (Path_len+1)*sizeof(CHAR16),
+                            (VOID**)&Path);
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_GetPathFromParts: gBS->AllocatePool failed");
+        goto exit0;
+    }
+    /*  Generate the path */
+    ret = AsciiStrToUnicodeStrS(DirPath,
+                                Path,
+                                DirPath_len+1);
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_GetPathFromParts: AsciiStrToUnicodeStrS failed "
+                L"for directory path");
+        goto exit1;
+    }
+    Path[DirPath_len] = L'\\';
+    ret = AsciiStrToUnicodeStrS(FileName,
+                                &(Path[DirPath_len+1]),
+                                FileName_len+1);
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_GetPathFromParts: AsciiStrToUnicodeStrS failed"
+                L"for file name");
+        goto exit1;
+    }
+    /*  Set output variables */
+    *Path_p = Path;
+exit1:
+    if(EFI_ERROR(ret)){
+        EFI_STATUS c_ret = gBS->FreePool(Path);
+        if(EFI_ERROR(c_ret))
+            BUM_LOG(L"BUM_GetPathFromParts: gBS->FreePool failed");
+    }
+exit0:
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_GetImageKeyDirPath(IN  CHAR8   *ConfigDirPath,
+                                                IN  CHAR8   *ImageName,
+                                                OUT CHAR16  **ImagePath_p,
+                                                OUT CHAR16  **KeydirPath_p)
+{
+    EFI_STATUS ret;
+    CHAR16 *KeydirPath, *ImagePath;
+    ret = BUM_GetPathFromParts( ConfigDirPath,
+                                KEYDIR_NAME,
+                                &KeydirPath);
+    if(EFI_ERROR(ret))
+        BUM_LOG(L"BUM_GetImageKeyDirPath: BUM_GetPathFromParts failed"
+                L"for the key directory.");
+    else{
+        ret = BUM_GetPathFromParts( ConfigDirPath,
+                                    ImageName,
+                                    &ImagePath);
+        if(EFI_ERROR(ret)){
+            EFI_STATUS cleanup_ret;
+            BUM_LOG(L"BUM_GetImageKeyDirPath: BUM_GetPathFromParts failed"
+                    L"for the image path.");
+            cleanup_ret = gBS->FreePool(KeydirPath);
+            if(EFI_ERROR(cleanup_ret))
+                BUM_LOG(L"BUM_GetImageKeyDirPath: gBS->FreePool failed");
+        }else{
+            *ImagePath_p = ImagePath;
+            *KeydirPath_p= KeydirPath;
+        }
+    }
+    /*  Generate the two strings */
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_FreeImageKeyDirPath(   IN  CHAR16  *ImagePath,
+                                                    IN  CHAR16  *KeydirPath)
+{
+    EFI_STATUS ret1, ret2;
+    ret1 = gBS->FreePool(ImagePath);
+    if(EFI_ERROR(ret1)){
+        BUM_LOG(L"BUM_FreeImageKeyDirPath: gBS->FreePool failed for ImagePath");
+    }
+    ret2 = gBS->FreePool(KeydirPath);
+    if(EFI_ERROR(ret2)){
+        BUM_LOG(L"BUM_FreeImageKeyDirPath: gBS->FreePool failed");
+    }
+    return EFI_ERROR(ret1)? ret1 : ret2;
+}
 
 static EFI_STATUS EFIAPI BUM_LoadImage( IN  CHAR16      *ImagePathString,
                                         OUT EFI_HANDLE  *LoadedImageHandle_p)
@@ -942,41 +1048,58 @@ static EFI_STATUS EFIAPI BUM_LoadImage( IN  CHAR16      *ImagePathString,
     return ret;
 }
 
-static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR16   *KeyDirPathString,
-                                                IN CHAR16   *ImagePathString,
-                                                IN BOOLEAN  LoadKeysByDefault,
-                                                IN EFI_HANDLE *LoadedImageHandle_p)
+static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR8        *ConfigDirPath,
+                                                IN CHAR8        *ImageName,
+                                                IN BOOLEAN      LoadKeysByDefault,
+                                                IN EFI_HANDLE   *LoadedImageHandle_p)
 {
-    EFI_STATUS LoadKey_ret, LoadImage_ret;
+    EFI_STATUS ret, LoadKey_ret, cleanup_ret;
+    CHAR16 *ImagePathString, *KeyDirPathString;
     EFI_HANDLE LoadedImageHandle;
-    BUM_LOG(L"    Loading image \"%s\" ... ", ImagePathString);
-    /*  Load keys by default if requested */
-    if(LoadKeysByDefault){
-        LoadKey_ret = BUM_loadKeys(KeyDirPathString);
-        /*  Failure in loading keys is not fatal */
-    }else
-        LoadKey_ret = EFI_SUCCESS;
-    /*  Make first attempt at loading the image */
-    LoadImage_ret = BUM_LoadImage(  ImagePathString,
-                                    &LoadedImageHandle);
-    if(EFI_ERROR(LoadImage_ret)){
-        /*  Check if we already attempted to load keys */
-        if(!LoadKeysByDefault){
+    ret = BUM_GetImageKeyDirPath(   ConfigDirPath,
+                                    ImageName,
+                                    &ImagePathString,
+                                    &KeyDirPathString);
+    if(EFI_ERROR(ret))
+        BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_GetImageKeyDirPath failed (%d)",
+                ret);
+    else {
+        BUM_LOG(L"    Loading image \"%s\" ... ", ImagePathString);
+        /*  Load keys by default if requested */
+        if(LoadKeysByDefault){
             LoadKey_ret = BUM_loadKeys(KeyDirPathString);
-            if(!EFI_ERROR(LoadKey_ret))
-                LoadImage_ret = BUM_LoadImage(  ImagePathString,
-                                                &LoadedImageHandle);
+            /*  Failure in loading keys is not fatal */
+        }else
+            LoadKey_ret = EFI_SUCCESS;
+        /*  Make first attempt at loading the image */
+        ret = BUM_LoadImage(ImagePathString,
+                            &LoadedImageHandle);
+        if(EFI_ERROR(ret)){
+            /*  Check if we already attempted to load keys */
+            if(!LoadKeysByDefault){
+                LoadKey_ret = BUM_loadKeys(KeyDirPathString);
+                if(!EFI_ERROR(LoadKey_ret))
+                    ret = BUM_LoadImage(ImagePathString,
+                                        &LoadedImageHandle);
+            }
         }
+        /*  Report any loading errors */
+        if(EFI_ERROR(LoadKey_ret))
+            BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_loadKeys failed for "
+                    L"\"%s\"",  KeyDirPathString);
+        if(EFI_ERROR(ret))
+            BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_LoadImage failed for "
+                    L"\"%s\"",  ImagePathString);
+        else
+            *LoadedImageHandle_p = LoadedImageHandle;
+        /*  Free the path-string buffers */
+        cleanup_ret = BUM_FreeImageKeyDirPath(  ImagePathString,
+                                                KeyDirPathString);
+        if(EFI_ERROR(cleanup_ret))
+            BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_FreeImageKeyDirPath "
+                    L"failed (%d)", cleanup_ret);
     }
-    if(EFI_ERROR(LoadKey_ret))
-        BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_loadKeys failed for "
-                L"\"%s\"",  KeyDirPathString);
-    if(EFI_ERROR(LoadImage_ret))
-        BUM_LOG(L"BUM_LoadKeyLoadImage: BUM_LoadImage failed for "
-                L"\"%s\"",  ImagePathString);
-    else
-        *LoadedImageHandle_p = LoadedImageHandle;
-    return LoadImage_ret;
+    return ret;
 }
 
 static EFI_STATUS EFIAPI BUM_SetStateBootImage( IN EFI_HANDLE LoadedImageHandle,
@@ -1014,17 +1137,17 @@ static EFI_STATUS EFIAPI BUM_SetStateBootImage( IN EFI_HANDLE LoadedImageHandle,
     return ret;
 }
 
-EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR16 *KeyDirPathString,
-                                                IN CHAR16 *ImagePathString,
+EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR8    *ConfigDirPath,
+                                                IN CHAR8    *ImageName,
                                                 IN BUM_LOADEDIMAGE_STATE_t State,
-                                                IN BOOLEAN LoadKeysByDefault,
-                                                IN BOOLEAN ReportBootStatus )
+                                                IN BOOLEAN  LoadKeysByDefault,
+                                                IN BOOLEAN  ReportBootStatus )
 {
     EFI_STATUS ret;
     EFI_HANDLE LoadedImageHandle;
     /*  Load images and keys. */
-    ret = BUM_LoadKeyLoadImage( KeyDirPathString,
-                                ImagePathString,
+    ret = BUM_LoadKeyLoadImage( ConfigDirPath,
+                                ImageName,
                                 LoadKeysByDefault,
                                 &LoadedImageHandle);
     if(EFI_ERROR(ret)){
@@ -1047,14 +1170,19 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR16 *KeyDirPathString,
 /*  Main                                                                      */
 /******************************************************************************/
 
+#define PRIMARY_CONFIGDIR   "primary"
+#define BACKUP_CONFIGDIR    "backup"
+#define BUM_IMAGENAME       "bootx64.efi"
+#define PAYLOAD_IMAGENAME   "grubx64.efi"
+
 EFI_STATUS BUM_back_main( VOID )
 {
     EFI_STATUS ret;
     /*  Try to load the keys from the backup directory and boot the
         backup GRUB image. Since we are launching GRUB, set boot
         status. */
-    ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
-                                        BACKUP_GRUB_PATH,
+    ret = BUM_loadKeysSetStateBootImage(BACKUP_CONFIGDIR,
+                                        PAYLOAD_IMAGENAME,
                                         BUM_LOADEDIMAGE_BACKTOGRUB,
                                         TRUE,
                                         TRUE);
@@ -1072,8 +1200,8 @@ EFI_STATUS BUM_prim_main( VOID )
     /*  Try to load the keys from the primary directory and boot the
         primary GRUB image. Since we are launching GRUB, set boot
         status. */
-    ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
-                                        PRIMARY_GRUB_PATH,
+    ret = BUM_loadKeysSetStateBootImage(PRIMARY_CONFIGDIR,
+                                        PAYLOAD_IMAGENAME,
                                         BUM_LOADEDIMAGE_PRIMTOGRUB,
                                         TRUE,
                                         TRUE);
@@ -1090,16 +1218,16 @@ EFI_STATUS BUM_root_main( VOID )
     EFI_STATUS ret;
     /*  Try to boot the primary UEFI application without loading keys
         or setting boot status.*/
-    ret = BUM_loadKeysSetStateBootImage(PRIMARY_KEYDIR_PATH,
-                                        PRIMARY_BUM_PATH,
+    ret = BUM_loadKeysSetStateBootImage(PRIMARY_CONFIGDIR,
+                                        BUM_IMAGENAME,
                                         BUM_LOADEDIMAGE_ROOTTOPRIM,
                                         FALSE,
                                         FALSE);
     if(EFI_ERROR(ret)){
         /* Try to boot the backup UEFI application without loading
            keys or setting boot status. */
-        ret = BUM_loadKeysSetStateBootImage(BACKUP_KEYDIR_PATH,
-                                            BACKUP_BUM_PATH,
+        ret = BUM_loadKeysSetStateBootImage(BACKUP_CONFIGDIR,
+                                            BUM_IMAGENAME,
                                             BUM_LOADEDIMAGE_ROOTTOBACK,
                                             FALSE,
                                             FALSE);
