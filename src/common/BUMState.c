@@ -19,13 +19,11 @@ static EFI_STATUS CopyConfig(   OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN],
                                 IN  CHAR8 *Src)
 {
     EFI_STATUS ret;
-    UINTN len = AsciiStrnLenS(Src, BUMSTATE_CONFIG_MAXLEN);
-    if(BUMSTATE_CONFIG_MAXLEN == len){
-        ret = EFI_INVALID_PARAMETER;
-    }else{
+    if(BUMState_configIsValid(Src)){
         AsciiStrCpy(Dst, Src);
         ret = EFI_SUCCESS;
-    }
+    }else
+        ret = EFI_INVALID_PARAMETER;
     return ret;
 }
 

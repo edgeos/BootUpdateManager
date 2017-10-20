@@ -11,6 +11,13 @@
 
 #define BUMSTATE_VERSION (0)
 #define BUMSTATE_CONFIG_MAXLEN (128)
+#define BUMSTATE_CONFIG_SIZE (sizeof(CHAR8) * BUMSTATE_CONFIG_MAXLEN)
+
+static inline BOOLEAN BUMState_configIsValid(   IN  CHAR8 *Config)
+{
+    UINTN len = AsciiStrnLenS(Config, BUMSTATE_CONFIG_MAXLEN);
+    return (len > 0) && (len < BUMSTATE_CONFIG_MAXLEN);
+}
 
 typedef struct {
     UINT64  StateUpdateCounter;

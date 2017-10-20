@@ -20,6 +20,7 @@ typedef char16_t            CHAR16;
 typedef char                CHAR8;
 typedef UINTN               EFI_STATUS;
 typedef VOID                EFI_FILE_PROTOCOL;
+typedef bool                BOOLEAN;
 
 static inline EFI_FILE_PROTOCOL *GetDirFileProtocol(char* dir_p)
 {

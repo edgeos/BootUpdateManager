@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <stdbool.h>
 #include <inttypes.h>
 #include <stdlib.h>
 #include <stdio.h>
