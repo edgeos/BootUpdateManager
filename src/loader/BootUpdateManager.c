@@ -1175,40 +1175,21 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR8    *ConfigDirPath,
 #define BUM_IMAGENAME       "bootx64.efi"
 #define PAYLOAD_IMAGENAME   "grubx64.efi"
 
-EFI_STATUS BUM_back_main( VOID )
-{
-    EFI_STATUS ret;
-    /*  Try to load the keys from the backup directory and boot the
-        backup GRUB image. Since we are launching GRUB, set boot
-        status. */
-    ret = BUM_loadKeysSetStateBootImage(BACKUP_CONFIGDIR,
-                                        PAYLOAD_IMAGENAME,
-                                        BUM_LOADEDIMAGE_BACKTOGRUB,
-                                        TRUE,
-                                        TRUE);
-    if(EFI_ERROR(ret)){
-        /* Failed to boot the backup GRUB image. */
-        BUM_LOG(L"BUM_back_main: BUM_loadKeysSetStateBootImage "
-                L"failed (%d)", ret);
-    }
-    return ret;
-}
-
-EFI_STATUS BUM_prim_main( VOID )
+EFI_STATUS BUM_config_main( IN  CHAR8   *ConfigName)
 {
     EFI_STATUS ret;
     /*  Try to load the keys from the primary directory and boot the
         primary GRUB image. Since we are launching GRUB, set boot
         status. */
-    ret = BUM_loadKeysSetStateBootImage(PRIMARY_CONFIGDIR,
+    ret = BUM_loadKeysSetStateBootImage(ConfigName,
                                         PAYLOAD_IMAGENAME,
                                         BUM_LOADEDIMAGE_PRIMTOGRUB,
                                         TRUE,
                                         TRUE);
     if(EFI_ERROR(ret)){
         /*  Failed to boot the primary GRUB image. */
-        BUM_LOG(L"BUM_prim_main: BUM_loadKeysSetStateBootImage "
-                L"failed (%d)", ret);
+        BUM_LOG(L"BUM_config_main: BUM_loadKeysSetStateBootImage "
+                L"failed for \"%a\" (%d)", ConfigName, ret);
     }
     return ret;
 }
@@ -1272,13 +1253,13 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
             break;
         case BUM_LOADEDIMAGE_PRIM:
             /*  This is the primary UEFI application. */
-            AppStatus = BUM_prim_main();
+            AppStatus = BUM_config_main(PRIMARY_CONFIGDIR);
             BUM_LOG(L"BUM_main: BUM_prim_main failed with status (%d)\n",
                     AppStatus);
             break;
         case BUM_LOADEDIMAGE_BACK:
             /*  This is the backup UEFI application. */
-            AppStatus = BUM_back_main();
+            AppStatus = BUM_config_main(BACKUP_CONFIGDIR);
             BUM_LOG(L"BUM_main: BUM_back_main failed with status (%d)\n",
                     AppStatus);
             break;
