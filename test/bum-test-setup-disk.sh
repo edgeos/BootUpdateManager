@@ -17,7 +17,7 @@ INSTALL_ROOTPARTSIZE="$((INSTALL_IMGSIZE - PARTOFFSET))" #256MB - (the GPT table
 if [ $# -ne 1 ]; then
     echo "Usage: $0 <install media e.g. /dev/sdb>"
     exit 1
-e
+else
     installdev=$1
 fi
 
@@ -26,7 +26,7 @@ parted ${installdev} "mktable gpt"
 parted ${installdev} "mkpart p fat32 ${PARTOFFSET}s ${PARTSIZE}s"
 parted ${installdev} "toggle 1 boot"
 parted ${installdev} "name 1 UEFI"
-
+sleep 1
 # Write the image to disk
 mkfs -t vfat -n UEFI "${installdev}1"
 
