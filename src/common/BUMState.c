@@ -15,18 +15,6 @@
 #define ASTATE_FILENAME L"A.state"
 #define BSTATE_FILENAME L"B.state"
 
-static EFI_STATUS CopyConfig(   OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN],
-                                IN  CHAR8 *Src)
-{
-    EFI_STATUS ret;
-    if(BUMState_configIsValid(Src)){
-        AsciiStrCpy(Dst, Src);
-        ret = EFI_SUCCESS;
-    }else
-        ret = EFI_INVALID_PARAMETER;
-    return ret;
-}
-
 static UINT64 BUMState_GetSum(  IN  BUM_state_t *state_p)
 {
     UINT64 *buffer, len, i, sum;

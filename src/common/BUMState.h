@@ -19,6 +19,18 @@ static inline BOOLEAN BUMState_configIsValid(   IN  CHAR8 *Config)
     return (len > 0) && (len < BUMSTATE_CONFIG_MAXLEN);
 }
 
+static inline EFI_STATUS CopyConfig(OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN],
+                                    IN  CHAR8 *Src)
+{
+    EFI_STATUS ret;
+    if(BUMState_configIsValid(Src)){
+        AsciiStrCpy(Dst, Src);
+        ret = EFI_SUCCESS;
+    }else
+        ret = EFI_INVALID_PARAMETER;
+    return ret;
+}
+
 typedef struct {
     UINT64  StateUpdateCounter;
     UINT64  StateSize;
