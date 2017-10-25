@@ -535,6 +535,236 @@ static EFI_STATUS EFIAPI BUM_setLoadedImageType( void )
 }
 
 /******************************************************************************/
+/*  Cur-config functions                                                     */
+/******************************************************************************/
+
+#define BUM_CURCONFIG_CFGBUMPRFX   "BUM:"
+#define BUM_CURCONFIG_CFGPLDPRFX   "PLD:"
+#define BUM_CURCONFIG_VARSIZE   (sizeof(BUM_CURCONFIG_CFGBUMPRFX)\
+                                    +   BUMSTATE_CONFIG_SIZE)
+#define BUM_CURCONFIG_VARNAME   L"BUM_CURCONFIG"
+
+typedef enum {
+    BUM_CURIMAGE_ROOTBUM = 0,
+    BUM_CURIMAGE_CFGBUM = 1,
+    BUM_CURIMAGE_CFGPLD = 2,
+    BUM_CURIMAGE_TYPE_COUNT
+} BUM_CURIMAGE_TYPE_t;
+
+static CHAR16* BUM_CURIMAGE_TYPE_TEXT[BUM_CURIMAGE_TYPE_COUNT+1]
+                = { L"Root BUM",
+                    L"Configuration BUM",
+                    L"Configuration Payload",
+                    L"Unknown" };
+
+static EFI_STATUS EFIAPI BUM_parseConfigVarValue(
+                            IN  CHAR8 configvar[static BUM_CURCONFIG_VARSIZE],
+                            OUT BUM_CURIMAGE_TYPE_t *imgtype_p,
+                            OUT CHAR8 config[static BUMSTATE_CONFIG_MAXLEN])
+{
+    EFI_STATUS ret;
+    UINTN prefix_size = sizeof(BUM_CURCONFIG_CFGBUMPRFX)/sizeof(CHAR8) - 1;
+    CHAR8 *configsrc = &(configvar[prefix_size]);
+    /*  Check the prefix to see if this is a config BUM */
+    if(0 == AsciiStrnCmp(   configvar,
+                            BUM_CURCONFIG_CFGBUMPRFX,
+                            prefix_size)){
+        ret = CopyConfig(config,configsrc);
+        if(!EFI_ERROR(ret))
+            *imgtype_p = BUM_CURIMAGE_CFGBUM;
+    }else{
+        /*  Check the prefix to see if this is a config payload */
+        if(0 == AsciiStrnCmp(   configvar,
+                                BUM_CURCONFIG_CFGPLDPRFX,
+                                prefix_size)){
+            ret = CopyConfig(config,configsrc);
+            if(!EFI_ERROR(ret))
+                *imgtype_p = BUM_CURIMAGE_CFGPLD;
+        } else {
+            /*  If its neither, the state is corrupted */
+            ret = EFI_COMPROMISED_DATA;
+        }
+    }
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_setConfigVarValue(
+                            OUT CHAR8 configvar[static BUM_CURCONFIG_VARSIZE],
+                            IN  BUM_CURIMAGE_TYPE_t imgtype,
+                            IN  CHAR8 config[static BUMSTATE_CONFIG_MAXLEN])
+{
+    EFI_STATUS ret;
+    CHAR8 *prefix_src;
+    UINTN prefix_len;
+    CHAR8 *configdst;
+    /*  Determine the prefix and prefix length based on image type */
+    switch(imgtype){
+        case BUM_CURIMAGE_CFGBUM:
+            prefix_src  = BUM_CURCONFIG_CFGBUMPRFX;
+            prefix_len  = sizeof(BUM_CURCONFIG_CFGBUMPRFX)/sizeof(CHAR8) - 1;
+            configdst   = &(configvar[prefix_len]);
+            break;
+
+        case BUM_CURIMAGE_CFGPLD:
+            prefix_src  = BUM_CURCONFIG_CFGPLDPRFX;
+            prefix_len  = sizeof(BUM_CURCONFIG_CFGPLDPRFX)/sizeof(CHAR8) - 1;
+            configdst   = &(configvar[prefix_len]);
+            break;
+
+        default:
+            /*  unknown image type --> no prefix */
+            prefix_src  = "";
+            prefix_len  = 0;
+            configdst   = configvar;
+            ret = EFI_UNSUPPORTED;
+            break;
+    }
+    /*  Only set the output buffer if there is a non-zero length prefix */
+    if(prefix_len > 0){
+        /*  Copy the prefix */
+        ret = AsciiStrnCpyS(configvar,
+                            BUM_CURCONFIG_VARSIZE*sizeof(CHAR8),
+                            prefix_src,
+                            prefix_len);
+        if(!EFI_ERROR(ret)){
+            /*  Copy the config */
+            ret = AsciiStrnCpyS(configdst,
+                                (BUM_CURCONFIG_VARSIZE-prefix_len)*sizeof(CHAR8),
+                                config,
+                                BUMSTATE_CONFIG_MAXLEN);
+        }
+    }
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_deleteVar( IN  CHAR16      *VariableName,
+                                        IN  EFI_GUID    *VendorGuid)
+{
+    EFI_STATUS ret;
+    /* Delete the variable */
+    ret = gRT->SetVariable( VariableName,
+                            VendorGuid,
+                            0,
+                            0,
+                            NULL);
+    if(EFI_ERROR(ret) && (ret != EFI_NOT_FOUND))
+        BUM_LOG(L"BUM_deleteVar: gRT->SetVariable with zero size and attributes"
+                L"returned %d.", ret);
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_setCurConfigVar(
+                            IN  CHAR8 configvar[static BUM_CURCONFIG_VARSIZE])
+{
+    EFI_STATUS ret;
+    ret = gRT->SetVariable( BUM_CURCONFIG_VARNAME,
+                            &gEfiBUMVariableGuid,
+                            EFI_VARIABLE_BOOTSERVICE_ACCESS,
+                            BUM_CURCONFIG_VARSIZE,
+                            configvar);
+    if(EFI_ERROR(ret))
+        BUM_LOG(L"BUM_setCurConfigVar: gRT->SetVariable returned %d",
+                ret);
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_getCurConfigVar(
+                            OUT CHAR8 configvar[static BUM_CURCONFIG_VARSIZE])
+{
+    EFI_STATUS ret;
+    UINTN   configvar_size;
+    UINT32  configvar_attributes;
+    /* Read the variable */
+    ret = gRT->GetVariable( BUM_CURCONFIG_VARNAME,
+                            &gEfiBUMVariableGuid,
+                            &configvar_attributes,
+                            &configvar_size,
+                            configvar);
+    /*  There is an error if there is a failure to read the varriable and it
+        isn't because variable is not found. Also, there is an error if the
+        variable is not of the appropriate size or attribute. It is not an
+        error if the variable is not found; it indicates the FWTOROOT state.
+        */
+    if( !EFI_ERROR(ret) ){
+        if( (configvar_size != BUM_CURCONFIG_VARSIZE)
+            || (configvar_attributes != EFI_VARIABLE_BOOTSERVICE_ACCESS) ){
+            BUM_LOG(L"BUM_getCurConfigVar: invalid size or attribute for "
+                    L"variable: ");
+            BUM_printVarInfo(   &gEfiBUMVariableGuid,
+                                BUM_CURCONFIG_VARNAME,
+                                configvar_attributes,
+                                BUM_CURCONFIG_VARSIZE );
+            /*  if the state varriable has inappropriate size or attribute,
+                the BUM didn't write it, and the varibale should be considered
+                compromised. */
+            ret = EFI_COMPROMISED_DATA;
+        }
+    }
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_getCurConfig(
+                                OUT BUM_CURIMAGE_TYPE_t *imgtype_p,
+                                OUT CHAR8 config[static BUMSTATE_CONFIG_MAXLEN])
+{
+    EFI_STATUS ret;
+    CHAR8   configvar[BUM_CURCONFIG_VARSIZE];
+    /* Read the variable */
+    ret = BUM_getCurConfigVar( configvar );
+    if( EFI_ERROR(ret) ){
+        /*  If the variable is not present, assume this is the root BUM */
+        if(ret == EFI_NOT_FOUND){
+            *imgtype_p = BUM_CURIMAGE_ROOTBUM;
+            config[0] = '\0';
+            ret = EFI_SUCCESS;
+        }else{
+            BUM_LOG(L"BUM_getCurConfig: BUM_getCurConfigVar returned %d",
+                    ret);
+        }
+    }else{
+        /*  Parse the variable */
+        ret = BUM_parseConfigVarValue(  configvar,
+                                        imgtype_p,
+                                        config);
+        if(EFI_ERROR(ret)){
+            BUM_LOG(L"BUM_getCurConfig: BUM_parseConfigVarValue returned %d",
+                    ret);
+        }
+    }
+    /*  If the variable is inappropriately set, delete it. */
+    if(EFI_ERROR(ret)){
+        EFI_STATUS cleanup = BUM_deleteVar( BUM_CURCONFIG_VARNAME,
+                                            &gEfiBUMVariableGuid);
+        if(EFI_ERROR(cleanup))
+            BUM_LOG(L"BUM_getCurConfig: BUM_deleteVar returned %d",
+                    cleanup);
+    }
+    return ret;
+}
+
+static EFI_STATUS EFIAPI BUM_setCurConfig(
+                                IN  BUM_CURIMAGE_TYPE_t imgtype,
+                                IN  CHAR8 config[static BUMSTATE_CONFIG_MAXLEN])
+{
+    EFI_STATUS ret;
+    CHAR8 configvar[BUM_CURCONFIG_VARSIZE];
+    ret = BUM_setConfigVarValue(configvar,
+                                imgtype,
+                                config);
+    if(EFI_ERROR(ret)){
+        BUM_LOG(L"BUM_setCurConfig: BUM_setConfigVarValue returned %d",
+                    ret);
+    }else{
+        ret = BUM_setCurConfigVar(configvar);
+        if(EFI_ERROR(ret)){
+            BUM_LOG(L"BUM_setCurConfig: BUM_setCurConfigVar returned %d",
+                    ret);
+        }
+    }
+    return ret;
+}
+
+/******************************************************************************/
 /*  Key-Loading functions                                                     */
 /******************************************************************************/
 
@@ -1102,11 +1332,18 @@ static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR8        *ConfigDirPath,
     return ret;
 }
 
-static EFI_STATUS EFIAPI BUM_SetStateBootImage( IN EFI_HANDLE LoadedImageHandle,
-                                                IN BUM_LOADEDIMAGE_STATE_t State,
-                                                IN BOOLEAN ReportBootStatus )
+static EFI_STATUS EFIAPI BUM_SetStateBootImage( 
+                                IN  EFI_HANDLE LoadedImageHandle,
+                                IN  BUM_LOADEDIMAGE_STATE_t State,
+                                IN  BUM_CURIMAGE_TYPE_t imgtype,
+                                IN  CHAR8 Config[static BUMSTATE_CONFIG_MAXLEN], 
+                                IN  BOOLEAN ReportBootStatus )
 {
     EFI_STATUS ret;
+    /*FIXME*/
+    BUM_setCurConfig(   imgtype,
+                        Config);
+    /*end FIXME*/
     /*  Set the UEFI LdImageState varriable.
         We don't want to load an image without setting the state first since
         the loaded image will not behave correctly without the propper state.
@@ -1137,16 +1374,18 @@ static EFI_STATUS EFIAPI BUM_SetStateBootImage( IN EFI_HANDLE LoadedImageHandle,
     return ret;
 }
 
-EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR8    *ConfigDirPath,
-                                                IN CHAR8    *ImageName,
-                                                IN BUM_LOADEDIMAGE_STATE_t State,
-                                                IN BOOLEAN  LoadKeysByDefault,
-                                                IN BOOLEAN  ReportBootStatus )
+EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
+                                IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN],
+                                IN  CHAR8   *ImageName,
+                                IN  BUM_CURIMAGE_TYPE_t imgtype,
+                                IN  BUM_LOADEDIMAGE_STATE_t State,
+                                IN  BOOLEAN  LoadKeysByDefault,
+                                IN  BOOLEAN  ReportBootStatus )
 {
     EFI_STATUS ret;
     EFI_HANDLE LoadedImageHandle;
     /*  Load images and keys. */
-    ret = BUM_LoadKeyLoadImage( ConfigDirPath,
+    ret = BUM_LoadKeyLoadImage( Config,
                                 ImageName,
                                 LoadKeysByDefault,
                                 &LoadedImageHandle);
@@ -1158,6 +1397,8 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR8    *ConfigDirPath,
         /*  Boot the image. */
         ret = BUM_SetStateBootImage(LoadedImageHandle,
                                     State,
+                                    imgtype,
+                                    Config,
                                     ReportBootStatus);
         if(EFI_ERROR(ret))
             BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_SetStateBootImage failed"
@@ -1175,21 +1416,25 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(IN CHAR8    *ConfigDirPath,
 #define BUM_IMAGENAME       "bootx64.efi"
 #define PAYLOAD_IMAGENAME   "grubx64.efi"
 
-EFI_STATUS BUM_config_main( IN  CHAR8   *ConfigName)
+static CHAR8 PrimaryConfig[BUMSTATE_CONFIG_MAXLEN] = PRIMARY_CONFIGDIR;
+static CHAR8 BackupConfig[BUMSTATE_CONFIG_MAXLEN] = BACKUP_CONFIGDIR;
+
+EFI_STATUS BUM_config_main( IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN])
 {
     EFI_STATUS ret;
     /*  Try to load the keys from the primary directory and boot the
         primary GRUB image. Since we are launching GRUB, set boot
         status. */
-    ret = BUM_loadKeysSetStateBootImage(ConfigName,
+    ret = BUM_loadKeysSetStateBootImage(Config,
                                         PAYLOAD_IMAGENAME,
+                                        BUM_CURIMAGE_CFGPLD,
                                         BUM_LOADEDIMAGE_PRIMTOGRUB,
                                         TRUE,
                                         TRUE);
     if(EFI_ERROR(ret)){
         /*  Failed to boot the primary GRUB image. */
         BUM_LOG(L"BUM_config_main: BUM_loadKeysSetStateBootImage "
-                L"failed for \"%a\" (%d)", ConfigName, ret);
+                L"failed for \"%a\" (%d)", Config, ret);
     }
     return ret;
 }
@@ -1199,16 +1444,18 @@ EFI_STATUS BUM_root_main( VOID )
     EFI_STATUS ret;
     /*  Try to boot the primary UEFI application without loading keys
         or setting boot status.*/
-    ret = BUM_loadKeysSetStateBootImage(PRIMARY_CONFIGDIR,
+    ret = BUM_loadKeysSetStateBootImage(PrimaryConfig,
                                         BUM_IMAGENAME,
+                                        BUM_CURIMAGE_CFGBUM,
                                         BUM_LOADEDIMAGE_ROOTTOPRIM,
                                         FALSE,
                                         FALSE);
     if(EFI_ERROR(ret)){
         /* Try to boot the backup UEFI application without loading
            keys or setting boot status. */
-        ret = BUM_loadKeysSetStateBootImage(BACKUP_CONFIGDIR,
+        ret = BUM_loadKeysSetStateBootImage(BackupConfig,
                                             BUM_IMAGENAME,
+                                            BUM_CURIMAGE_CFGBUM,
                                             BUM_LOADEDIMAGE_ROOTTOBACK,
                                             FALSE,
                                             FALSE);
@@ -1227,6 +1474,8 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
 {
     EFI_STATUS AppStatus = EFI_SUCCESS;
     EFI_STATUS FuncStatus;
+    BUM_CURIMAGE_TYPE_t imgtype;
+    CHAR8   ConfigLocal[BUMSTATE_CONFIG_MAXLEN];
     /*  Setup initial console-based logging */
     BUM_LogPrint_init( FALSE );
     BUM_LOG( L"initializing BUM logging ... " );
@@ -1242,6 +1491,18 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
     BUM_LOG(L"****************************************"
             L"****************************************" );
     BUM_LOG(L"");
+    /*FIXME*/
+    FuncStatus = BUM_getCurConfig(  &imgtype,
+                                    ConfigLocal);
+    if(!EFI_ERROR(FuncStatus)){
+        BUM_LOG(L"    Image Type (New): %s",
+                BUM_CURIMAGE_TYPE_TEXT[imgtype]);
+        if((imgtype == BUM_CURIMAGE_CFGBUM)
+            || (imgtype == BUM_CURIMAGE_CFGPLD))
+            BUM_LOG(L"    Configuration:    %a",
+                    ConfigLocal);
+    }
+    /*end FIXME*/
     BUM_LOG(L"    Loaded Image Type: %s",
             BUM_LOADEDIMAGE_TYPE_TEXT[gLoadedImageType] );
     switch(gLoadedImageType){

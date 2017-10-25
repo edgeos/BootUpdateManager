@@ -22,7 +22,7 @@
   loader/BootUpdateManager.c
   loader/__BootUpdateManager.h
 #  common/BUMState.c
-#  common/BUMState.h
+  common/BUMState.h
 #  loader/__BUMState.h
   loader/BootStat.c
   loader/BootStat.h
