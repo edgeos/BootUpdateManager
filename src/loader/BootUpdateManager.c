@@ -53,34 +53,21 @@ static BUM_LOADEDIMAGE_TYPE_t BUM_STATE_TO_TYPE_TABLE[BUM_LOADEDIMAGE_STATE_COUN
             BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOGRUB <This is an error> */
         };
 
-static CHAR16* BUM_LOADEDIMAGE_TYPE_TEXT[BUM_LOADEDIMAGE_TYPE_COUNT]
-                = { L"Root",
-                    L"Primary",
-                    L"Backup",
-                    L"Unknown" };
-
 /*  Boot-status directory is common to all image types. The image that runs
     last will have its state in the boot-status directory. */
 #define BOOTSTAT_PATH   L"\\bootstatus"
 
-#define ROOT_BUM_PATH       L"\\efi\\boot\\bootx64.efi"
 #define ROOT_BUMLOG_PATH    L"\\root\\log"
 
 /* Load path compare strings for boot from "primary" directory.
  *  Grub can mix forward slash and back slash in chainloader so check 2 types.
  */
-#define PRIMARY_BUM_PATH   L"\\primary\\bootx64.efi"
 #define PRIMARY_BUMLOG_PATH   L"\\primary\\log"
-#define PRIMARY_GRUB_PATH  L"\\primary\\grubx64.efi"
-#define PRIMARY_KEYDIR_PATH  L"\\primary\\keys"
 
 /* Load path compare strings for boot from "backup" directory.
  *  Grub can mix forward slash and back slash in chainloader so check 2 types.
  */
-#define BACKUP_BUM_PATH   L"\\backup\\bootx64.efi"
 #define BACKUP_BUMLOG_PATH   L"\\backup\\log"
-#define BACKUP_GRUB_PATH  L"\\backup\\grubx64.efi"
-#define BACKUP_KEYDIR_PATH  L"\\backup\\keys"
 
 /* - key-update mechanism is a mail-box mechanism
    - key-update operations are requested by the OS placing an appropriately
@@ -331,84 +318,6 @@ static VOID BUM_printVarInfo(   EFI_GUID *guid_p, CHAR16 *name_p,
 /*  Functions for finding loaded-image state and type                         */
 /******************************************************************************/
 
-/* Verify loaded-image type based on path name */
-static EFI_STATUS EFIAPI BUM_verifyLdImageType( OUT BUM_LOADEDIMAGE_TYPE_t *LoadedImageTypep )
-{
-    EFI_STATUS                      Status;
-    CHAR16 *LoadedImageFilePathText = NULL;
-    EFI_UNICODE_COLLATION_PROTOCOL  *UnicodeCollation;
-    int i;
-
-    /*  Find the UnicodeCollation protocol which is needed to compare CHAR16
-        strings */
-    Status = gBS->LocateProtocol (  &gEfiUnicodeCollation2ProtocolGuid,
-                                    NULL,
-                                    (VOID **) &UnicodeCollation );
-    if (EFI_ERROR (Status)) {
-        Status = gBS->LocateProtocol (  &gEfiUnicodeCollationProtocolGuid,
-                                        NULL,
-                                        (VOID **) &UnicodeCollation );
-        if (EFI_ERROR (Status)){
-            BUM_LOG(L"BUM_verifyLdImageType: Failed to find "
-                    L"EfiUnicodeCollationProtocol");
-            /* Output unknown loaded-image type error and return error status*/
-            *LoadedImageTypep = BUM_LOADEDIMAGE_UNKNOWN;
-            return Status;
-        }
-    }
-
-    /*  Obtain the file path from the loaded-image protocol and convert to
-        CHAR16 */
-    LoadedImageFilePathText = ConvertDevicePathToText(
-                                            gLoadedImageProtocol->FilePath,
-                                            FALSE, FALSE);
-    if( NULL == LoadedImageFilePathText ){
-        BUM_LOG(L"BUM_verifyLdImageType: ConvertDevicePathToText failed for"
-                L" gLoadedImageProtocol->FilePath");
-        /* Output unknown loaded-image type error and return error status*/
-        *LoadedImageTypep = BUM_LOADEDIMAGE_UNKNOWN;
-        return EFI_NOT_READY;
-    }
-
-    /*  Loop through path string until null-terminator.
-        Convert forward slashes to back slashes. */
-    for( i = 0; (0 != LoadedImageFilePathText[i]); i++ ){
-        if( L'/' == LoadedImageFilePathText[i] )
-            LoadedImageFilePathText[i] = L'\\';
-    }
-
-    BUM_LOG(L"    Loaded Image: \"%s\"", LoadedImageFilePathText);
-
-    /*  Compare loaded-image path against known-expected paths to determine
-        loaded-image type.*/
-    if( 0 == UnicodeCollation->StriColl(UnicodeCollation,
-                                        LoadedImageFilePathText,
-                                        PRIMARY_BUM_PATH) ){
-        *LoadedImageTypep = BUM_LOADEDIMAGE_PRIM;
-    } else if ( 0 == UnicodeCollation->StriColl(UnicodeCollation,
-                                                LoadedImageFilePathText,
-                                                BACKUP_BUM_PATH) ){
-        *LoadedImageTypep = BUM_LOADEDIMAGE_BACK;
-    } else if ( 0 == UnicodeCollation->StriColl(UnicodeCollation,
-                                                LoadedImageFilePathText,
-                                                ROOT_BUM_PATH) ){
-        *LoadedImageTypep = BUM_LOADEDIMAGE_ROOT;
-    } else{
-        /* Unknown loaded-image type. */
-        *LoadedImageTypep = BUM_LOADEDIMAGE_UNKNOWN;
-    }
-
-    /* Free the file-path text. */
-    Status = gBS->FreePool( LoadedImageFilePathText );
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_verifyLdImageType: gBS->FreePool failed for "
-                L"LoadedImageFilePathText.");
-        /* This is not serious enough to stop booting. Fall through. */
-    }
-
-    return EFI_SUCCESS;
-}
-
 /* Set the UEFI LdImageState varriable */
 static EFI_STATUS EFIAPI BUM_setLdImageState( IN BUM_LOADEDIMAGE_STATE_t state )
 {
@@ -507,11 +416,8 @@ static EFI_STATUS EFIAPI BUM_getLdImageState( OUT BUM_LOADEDIMAGE_STATE_t *state
 
 static EFI_STATUS EFIAPI BUM_setLoadedImageType( void )
 {
-    EFI_STATUS Status, vLIT_Status;
-
+    EFI_STATUS Status;
     BUM_LOADEDIMAGE_STATE_t state;
-    BUM_LOADEDIMAGE_TYPE_t lLoadedImageType;
-
     Status = BUM_getLdImageState( &state );
     if( EFI_ERROR(Status) ){
         BUM_LOG(L"BUM_setLoadedImageType: BUM_getLdImageState failed with "
@@ -519,18 +425,6 @@ static EFI_STATUS EFIAPI BUM_setLoadedImageType( void )
         gLoadedImageType = BUM_LOADEDIMAGE_UNKNOWN;
     } else
         gLoadedImageType = BUM_STATE_TO_TYPE_TABLE[state];
-
-    vLIT_Status = BUM_verifyLdImageType( &lLoadedImageType );
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_setLoadedImageType: (WARNING) BUM_verifyLdImageType "
-                    L"failed with error (%d)", vLIT_Status);
-    } else {
-        if( lLoadedImageType != gLoadedImageType ){
-            BUM_LOG(L"BUM_setLoadedImageType: (WARNING) loaded-image path "
-                    L"name is inconsistent with UEFI LdImageState varriable");
-        }
-    }
-
     return Status;
 }
 
@@ -937,7 +831,6 @@ static EFI_STATUS BUM_ReportBootStatus( void )
     }
 
     Status = ReportBootStat(    BOOTSTAT_BMAP_FULL, BootStatDir,
-                                BUM_LOADEDIMAGE_TYPE_TEXT[gLoadedImageType],
                                 &logstate );
     if( EFI_ERROR(Status) )
         BUM_LOG(L"BUM_ReportBootStatus: ReportBootStat failed");
