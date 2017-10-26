@@ -22,8 +22,6 @@ static EFI_FILE_PROTOCOL    *BootStatDir_g = NULL;
 
 static LogPrint_state_t *logstatep_g = NULL;
 
-static CHAR16           *ImageName_g = NULL;
-
 static EFI_STATUS BootStat_TimeStamp( void )
 {
     EFI_STATUS Status;
@@ -120,35 +118,6 @@ static EFI_STATUS BootStat_SmBiosInfo( void )
     gBS->FreePool(Versionp);
     gBS->FreePool(ReleaseDatep);
 exit0:
-    return Status;
-}
-
-static EFI_STATUS BootStat_LoadedImageType( void )
-{
-    EFI_STATUS Status;
-    UINTN   NameLen;
-    RETURN_STATUS ret;
-    CHAR8   ImageName_l[IMAGENAME_MAX];
-
-    NameLen = StrnLenS(ImageName_g, IMAGENAME_MAX);
-
-    if(NameLen >= IMAGENAME_MAX)
-        return EFI_INVALID_PARAMETER;
-
-    BOOTSTAT_LOG(   L"BootStat_LoadedImageType: L\"%S\"", ImageName_g);
-
-    ret = UnicodeStrToAsciiStrS( ImageName_g, ImageName_l, IMAGENAME_MAX );
-    if( RETURN_ERROR(ret) ){
-        BOOTSTAT_LOG(   L"BootStat_LoadedImageType: UnicodeStrToAsciiStrS"
-                        L" failed");
-        return EFI_INVALID_PARAMETER;
-    }
-
-    Status = BootState_ReportToFile(L"bum_ldimgtype", ImageName_l, NameLen);
-    if( EFI_ERROR(Status) )
-        BOOTSTAT_LOG(   L"BootStat_LoadedImageType: BootState_ReportToFile"
-                        L" failed");
-
     return Status;
 }
 
@@ -318,28 +287,24 @@ typedef struct {
 } BootStat_Descriptor_t;
 
 static EFI_STATUS BootStat_SmBiosInfo( void );
-static EFI_STATUS BootStat_LoadedImageType( void );
 static EFI_STATUS BootStat_UEFINVInfo( void );
 static EFI_STATUS BootStat_UEFIVars( void );
 
 static BootStat_Descriptor_t BootStat_array[BOOTSTAT_ENUM_COUNT] =
         {   { TRUE, L"bum_timestamp",   BootStat_TimeStamp },
             { TRUE, L"smbios_info",     BootStat_SmBiosInfo },
-            { TRUE, L"bum_ldimgtype",   BootStat_LoadedImageType },
             { TRUE, L"uefi_nvinfo",     BootStat_UEFINVInfo},
             { TRUE, L"uefi_vars",       BootStat_UEFIVars},
         };
 
 EFI_STATUS EFIAPI ReportBootStat(   IN UINT64               BootStat_bitmap,
                                     IN EFI_FILE_PROTOCOL    *BootStatDir_l,
-                                    IN CHAR16               *ImageName_l,
                                     IN LogPrint_state_t     *logstatep_l )
 {
     BootStat_enum_t i;
     EFI_STATUS Status;
 
     BootStatDir_g   = BootStatDir_l;
-    ImageName_g     = ImageName_l;
     logstatep_g     = logstatep_l;
 
     for( i = 0; i < BOOTSTAT_ENUM_COUNT; i++ ){
@@ -358,7 +323,6 @@ EFI_STATUS EFIAPI ReportBootStat(   IN UINT64               BootStat_bitmap,
     }
 
     logstatep_g = NULL;
-    ImageName_g = NULL;
 
     return EFI_SUCCESS;
 }
