@@ -1390,8 +1390,8 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
                                 LoadKeysByDefault,
                                 &LoadedImageHandle);
     if(EFI_ERROR(ret)){
-        BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_LoadKeyLoadImage failed"
-                L"(%d)",  ret);
+        BUM_LOG(L"BUM_loadKeysSetStateBootImage: "
+                L"BUM_LoadKeyLoadImage failed (%d)",  ret);
 
     }else{
         /*  Boot the image. */
@@ -1401,8 +1401,8 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
                                     Config,
                                     ReportBootStatus);
         if(EFI_ERROR(ret))
-            BUM_LOG(L"BUM_loadKeysSetStateBootImage: BUM_SetStateBootImage failed"
-                    L"(%d)", ret);
+            BUM_LOG(L"BUM_loadKeysSetStateBootImage: "
+                    L"BUM_SetStateBootImage failed (%d)", ret);
     }
     return ret;
 }
@@ -1474,8 +1474,8 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
 {
     EFI_STATUS AppStatus = EFI_SUCCESS;
     EFI_STATUS FuncStatus;
-    BUM_CURIMAGE_TYPE_t imgtype;
-    CHAR8   ConfigLocal[BUMSTATE_CONFIG_MAXLEN];
+    BUM_CURIMAGE_TYPE_t imgtype = BUM_CURIMAGE_TYPE_COUNT;
+    CHAR8   ConfigLocal[BUMSTATE_CONFIG_MAXLEN]= "\0";
     /*  Setup initial console-based logging */
     BUM_LogPrint_init( FALSE );
     BUM_LOG( L"initializing BUM logging ... " );
@@ -1491,47 +1491,35 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
     BUM_LOG(L"****************************************"
             L"****************************************" );
     BUM_LOG(L"");
-    /*FIXME*/
-    FuncStatus = BUM_getCurConfig(  &imgtype,
-                                    ConfigLocal);
-    if(!EFI_ERROR(FuncStatus)){
-        BUM_LOG(L"    Image Type (New): %s",
+    AppStatus = BUM_getCurConfig(  &imgtype,
+                                   ConfigLocal);
+    if(EFI_ERROR(AppStatus)){
+        BUM_LOG(L"BUM_main: BUM_getCurConfig failed with status (%d)\n",
+                AppStatus);
+    }else{
+        BUM_LOG(L"    Loaded-image Type (New): %s",
                 BUM_CURIMAGE_TYPE_TEXT[imgtype]);
-        if((imgtype == BUM_CURIMAGE_CFGBUM)
-            || (imgtype == BUM_CURIMAGE_CFGPLD))
-            BUM_LOG(L"    Configuration:    %a",
-                    ConfigLocal);
-    }
-    /*end FIXME*/
-    BUM_LOG(L"    Loaded Image Type: %s",
-            BUM_LOADEDIMAGE_TYPE_TEXT[gLoadedImageType] );
-    switch(gLoadedImageType){
-        case BUM_LOADEDIMAGE_ROOT:
-            /*  This is the root BUM. */
-            AppStatus = BUM_root_main();
-            BUM_LOG(L"BUM_main: BUM_root_main failed with status (%d)\n",
-                    AppStatus);
-            break;
-        case BUM_LOADEDIMAGE_PRIM:
-            /*  This is the primary UEFI application. */
-            AppStatus = BUM_config_main(PRIMARY_CONFIGDIR);
-            BUM_LOG(L"BUM_main: BUM_prim_main failed with status (%d)\n",
-                    AppStatus);
-            break;
-        case BUM_LOADEDIMAGE_BACK:
-            /*  This is the backup UEFI application. */
-            AppStatus = BUM_config_main(BACKUP_CONFIGDIR);
-            BUM_LOG(L"BUM_main: BUM_back_main failed with status (%d)\n",
-                    AppStatus);
-            break;
-        case BUM_LOADEDIMAGE_UNKNOWN:
-            BUM_LOG(L"BUM_main: loaded-image type = \"ERROR\"");
-            AppStatus = EFI_LOAD_ERROR;
-            break;
-        default :
-            BUM_LOG(L"BUM_main: Unsupported loaded-image type");
-            AppStatus = EFI_UNSUPPORTED;
-            break;
+        switch(imgtype){
+            case BUM_CURIMAGE_ROOTBUM:
+                /*  This is the root BUM. */
+                AppStatus = BUM_root_main();
+                BUM_LOG(L"BUM_main: BUM_root_main failed with status (%d)\n",
+                        AppStatus);
+                break;
+            case BUM_CURIMAGE_CFGBUM:
+                BUM_LOG(L"    Configuration:    %a",
+                        ConfigLocal);
+                /*  This is a configuration BUM. */
+                AppStatus = BUM_config_main(ConfigLocal);
+                BUM_LOG(L"BUM_main: BUM_config_main failed with status (%d)\n",
+                        AppStatus);
+                break;
+            default:
+                /*  Something is wrong. */
+                BUM_LOG(L"BUM_main: Unknown loaded-image type");
+                AppStatus = EFI_UNSUPPORTED;
+                break;
+        }
     }
     /*  Attempt to set the EFI State Varriable.
         Already in failure mode, so return value doesn't matter. */
