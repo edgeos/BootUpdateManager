@@ -49,6 +49,68 @@ exit0:
     return Status;
 }
 
+static EFI_FILE_PROTOCOL *sgBootPart_RootDir = NULL;
+
+EFI_STATUS EFIAPI Common_FileOpsInit(   EFI_HANDLE  BootPartHandle)
+{
+    EFI_STATUS Status;
+
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *SimpleFileSystem;
+
+    /*  Find the EFI_SIMPLE_FILE_SYSTEM_PROTOCOL interface for the boot
+        partition. */
+    Status = gBS->HandleProtocol(   BootPartHandle,
+                                    &gEfiSimpleFileSystemProtocolGuid,
+                                    (VOID**)&SimpleFileSystem);
+    if(!EFI_ERROR(Status)){
+        /*  Open the boot partition. */
+        Status = SimpleFileSystem->OpenVolume(  SimpleFileSystem,
+                                                &sgBootPart_RootDir);
+        if (EFI_ERROR(Status))
+            /*  On failing to open the root directory, set protocol to NULL */
+            sgBootPart_RootDir = NULL;
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_FileOpsClose( VOID )
+{
+    EFI_STATUS Status;
+    /* Close the EFI_FILE_PROTOCOL interface for the root directory. */
+    /* Close never fails. */
+    Status = sgBootPart_RootDir->Close( sgBootPart_RootDir );
+    sgBootPart_RootDir = NULL;
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_CreateOpenFile(OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                        IN  CHAR16              *FileName,
+                                        IN  UINT64              OpenMode,
+                                        IN  UINT64              Attributes)
+{
+    if(NULL != sgBootPart_RootDir)
+        return sgBootPart_RootDir->Open(sgBootPart_RootDir,
+                                        NewHandle,
+                                        FileName,
+                                        (OpenMode | EFI_FILE_MODE_CREATE),
+                                        Attributes);
+    else
+        return EFI_NOT_READY;
+}
+
+EFI_STATUS EFIAPI Common_OpenFile(  OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                    IN  CHAR16              *FileName,
+                                    IN  UINT64              OpenMode)
+{
+   if(NULL != sgBootPart_RootDir)
+        return sgBootPart_RootDir->Open(sgBootPart_RootDir,
+                                        NewHandle,
+                                        FileName,
+                                        OpenMode,
+                                        0);
+    else
+        return EFI_NOT_READY;
+}
 
 EFI_STATUS EFIAPI Common_GetFileInfo(   IN  EFI_FILE_PROTOCOL   *filep,
                                         OUT EFI_FILE_INFO       **fileinfo_pp,

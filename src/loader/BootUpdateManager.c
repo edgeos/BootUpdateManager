@@ -162,54 +162,8 @@ static EFI_HANDLE gLoadedImageHandle;
 static EFI_LOADED_IMAGE_PROTOCOL *gLoadedImageProtocol = NULL;
 static BUM_LOADEDIMAGE_TYPE_t gLoadedImageType = BUM_LOADEDIMAGE_ROOT;
 
-static EFI_FILE_PROTOCOL *gBootPart_RootDir = NULL;
-
 static LogPrint_state_t logstate = ZERO_LOG_PRINT_STATE();
 static EFI_FILE_PROTOCOL *LogDir = NULL;
-
-/******************************************************************************/
-/*  Boot-partition file-operation functions                                   */
-/******************************************************************************/
-
-static EFI_STATUS BUM_BootPart_OpenRootDir( void )
-{
-    EFI_STATUS Status;
-
-    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *SimpleFileSystem;
-
-    /*  Find the EFI_SIMPLE_FILE_SYSTEM_PROTOCOL interface for the boot
-        partition. */
-    Status = gBS->HandleProtocol(   gLoadedImageProtocol->DeviceHandle,
-                                    &gEfiSimpleFileSystemProtocolGuid,
-                                    (VOID**)&SimpleFileSystem);
-    if (EFI_ERROR(Status)) {
-        BUM_LOG(L"BUM_BootPart_OpenRootDir: gBS->HandleProtocol failed for "
-                L"SimpleFileSystemProtocol");
-        return Status;
-    }
-
-    /*  Open the boot partition. */
-    Status = SimpleFileSystem->OpenVolume(  SimpleFileSystem,
-                                            &gBootPart_RootDir);
-    if (EFI_ERROR(Status)) {
-        BUM_LOG(L"BUM_BootPart_OpenRootDir: OpenVolume failed for the"
-                L"SimpleFileSystemProtocol for the boot partition.");
-    }
-
-    return Status;
-}
-
-static EFI_STATUS BUM_BootPart_CloseRootDir( void )
-{
-    EFI_STATUS Status;
-
-    /* Close the EFI_FILE_PROTOCOL interface for the root directory. */
-    /* Close never fails. */
-    Status = gBootPart_RootDir->Close( gBootPart_RootDir );
-    gBootPart_RootDir = NULL;
-
-    return Status;
-}
 
 /******************************************************************************/
 /*  Miscellaneous functions                                                   */
@@ -777,13 +731,12 @@ static EFI_STATUS BUM_loadKeys( IN CHAR16 *KeyDirPathText )
     BUM_LOG(L"    Loading keys from \"%s\"", KeyDirPathText);
 
     /* Open the key directory */
-    RetStatus = gBootPart_RootDir->Open(gBootPart_RootDir,
-                                        &KeyDir,
-                                        KeyDirPathText,
-                                        (   EFI_FILE_MODE_READ |
-                                            EFI_FILE_MODE_WRITE ), 0);
+    RetStatus = Common_OpenFile(&KeyDir,
+                                KeyDirPathText,
+                                ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE ));
     if( EFI_ERROR(RetStatus) ){
-        BUM_LOG(L"BUM_loadKeys: Open failed for the key directory \"%s\"",
+        BUM_LOG(L"BUM_loadKeys: Common_OpenFile failed for the key directory "\
+                L"\"%s\"",
                 KeyDirPathText);
         return RetStatus;
     }
@@ -816,17 +769,15 @@ static EFI_STATUS BUM_ReportBootStatus( void )
     EFI_FILE_PROTOCOL *BootStatDir;
 
     /* Open the log directory from the boot directory. */
-    Status = gBootPart_RootDir->Open(   gBootPart_RootDir, &BootStatDir,
-                                        BOOTSTAT_PATH,
-                                        (   EFI_FILE_MODE_READ |
-                                            EFI_FILE_MODE_WRITE |
-                                            EFI_FILE_MODE_CREATE ),
-                                        EFI_FILE_DIRECTORY );
+    Status = Common_CreateOpenFile( &BootStatDir,
+                                    BOOTSTAT_PATH,
+                                    ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
+                                    EFI_FILE_DIRECTORY);
     if( EFI_ERROR(Status) ){
         /*  If the log directory fails to open, then disable file-based
             logging. */
-        BUM_LOG(L"BUM_ReportBootStatus: Open failed for the boot-state"
-                L" directory \"%s\"", BOOTSTAT_PATH);
+        BUM_LOG(L"BUM_ReportBootStatus: Common_CreateOpenFile failed for the "
+                L"boot-state directory \"%s\"", BOOTSTAT_PATH);
         return Status;
     }
 
@@ -908,12 +859,11 @@ static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
 
         if( logmode & LOG_PRINT_MODE_FILE ){
             /* Open the log directory from the boot directory. */
-            Status = gBootPart_RootDir->Open(   gBootPart_RootDir, &LogDir,
-                                                LogDirPath,
-                                                (   EFI_FILE_MODE_READ |
-                                                    EFI_FILE_MODE_WRITE |
-                                                    EFI_FILE_MODE_CREATE ),
-                                                EFI_FILE_DIRECTORY );
+            Status = Common_CreateOpenFile( &LogDir,
+                                            LogDirPath,
+                                            ( EFI_FILE_MODE_READ |
+                                                EFI_FILE_MODE_WRITE),
+                                            EFI_FILE_DIRECTORY);
             if( EFI_ERROR(Status) ){
                 /*  If the log directory fails to open, then disable file-based
                     logging. */
@@ -973,9 +923,9 @@ static EFI_STATUS BUM_init( IN EFI_HANDLE LoadedImageHandle )
     }
 
     /* Open the root directory of the boot partition for file operations. */
-    Status = BUM_BootPart_OpenRootDir( );
+    Status = Common_FileOpsInit(gLoadedImageProtocol->DeviceHandle);
     if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_init: BUM_BootPart_OpenRootDir failed");
+        BUM_LOG(L"BUM_init: Common_FileOpsInit failed");
         return Status;
     }
 
@@ -999,9 +949,9 @@ static EFI_STATUS BUM_fini( void )
         BUM_LOG(L"BUM_fini: 'BUM_LogPrint_init( FALSE )' failed");
 
     /* Close the root directory of the boot partition */
-    Status = BUM_BootPart_CloseRootDir( );
+    Status = Common_FileOpsClose( );
     if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_fini: BUM_BootPart_CloseRootDir failed");
+        BUM_LOG(L"BUM_fini: Common_FileOpsClose failed");
         return Status;
     }
 

@@ -14,6 +14,19 @@ EFI_STATUS EFIAPI Common_ReadUEFIVariable(  IN  EFI_GUID*   guid,
                                             OUT UINTN       *buffersize_p,
                                             OUT UINT32      *attrs_p );
 
+EFI_STATUS EFIAPI Common_FileOpsInit(   EFI_HANDLE  BootPartHandle);
+
+EFI_STATUS EFIAPI Common_FileOpsClose( VOID );
+
+EFI_STATUS EFIAPI Common_CreateOpenFile(OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                        IN  CHAR16              *FileName,
+                                        IN  UINT64              OpenMode,
+                                        IN  UINT64              Attributes);
+
+EFI_STATUS EFIAPI Common_OpenFile(  OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                    IN  CHAR16              *FileName,
+                                    IN  UINT64              OpenMode);
+
 EFI_STATUS EFIAPI Common_GetFileInfo(   IN  EFI_FILE_PROTOCOL   *filep,
                                         OUT EFI_FILE_INFO       **fileinfo_pp,
                                         OUT UINTN               *fileinfosize_p );
