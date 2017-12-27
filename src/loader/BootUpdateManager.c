@@ -523,6 +523,7 @@ static EFI_STATUS EFIAPI BUM_getCurConfigVar(
     UINTN   configvar_size;
     UINT32  configvar_attributes;
     /* Read the variable */
+    configvar_size = BUM_CURCONFIG_VARSIZE;
     ret = gRT->GetVariable( BUM_CURCONFIG_VARNAME,
                             &gEfiBUMVariableGuid,
                             &configvar_attributes,
