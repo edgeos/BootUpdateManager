@@ -1,5 +1,5 @@
 /* LogPrint.c - Implement generic logging (printing) code.
- *              NOTE:   No error logging in this code since this IS the 
+ *              NOTE:   No error logging in this code since this IS the
  *                      error-logging code.
  *
  * Author: Safayet N Ahmed (GE Global Research) <Safayet.Ahmed@ge.com>
@@ -19,19 +19,20 @@
 #define LOG_PRINT_LINENO_MAX_MASK   (LOG_PRINT_LINENO_MAX - 1)
 #define LOG_PRINT_LINENO_HEXDIGITS  ((LOG_PRINT_LINENO_MAX_BITS + 3) / 4)
 
-static EFI_STATUS LogPrint_file_setline( IN LogPrint_state_t *statep )
+static EFI_STATUS LogPrint_file_setline(IN LogPrint_state_t *statep,
+                                        IN UINT16           logline)
 {
     EFI_STATUS  Status;
     INTN i;
     UINT16 lineNumberAcc;
     CHAR8 lineNumber[LOG_PRINT_LINENO_HEXDIGITS];
 
-    static const CHAR8 _IntToHexLT[16] = 
+    static const CHAR8 _IntToHexLT[16] =
                         {   '0', '1', '2', '3', '4', '5', '6', '7',
                             '8', '9', 'A', 'B', 'C', 'D', 'E', 'F' };
 
     /* Convert line number to hex value */
-    lineNumberAcc = statep->logline;
+    lineNumberAcc = logline;
     for( i = (LOG_PRINT_LINENO_HEXDIGITS-1); i >= 0; i--){
         lineNumber[i] = _IntToHexLT[(lineNumberAcc & 0xf)];
         lineNumberAcc = lineNumberAcc >> 4;
@@ -45,7 +46,8 @@ static EFI_STATUS LogPrint_file_setline( IN LogPrint_state_t *statep )
     return Status;
 }
 
-static EFI_STATUS LogPrint_file_getline( IN LogPrint_state_t *statep )
+static EFI_STATUS LogPrint_file_getline(IN  LogPrint_state_t    *statep,
+                                        OUT UINT16              *logline_p)
 {
     EFI_STATUS  Status;
 
@@ -61,37 +63,38 @@ static EFI_STATUS LogPrint_file_getline( IN LogPrint_state_t *statep )
                                     &LogLineFileProtocol, L"logline.txt",
                                     ( EFI_FILE_MODE_READ ), 0);
     if( EFI_ERROR(Status) ){
-        statep->logline = 0;
-        return EFI_NOT_READY;
+        lineNumberAcc = 0;
+        Status = EFI_NOT_READY;
+        goto exit0;
     }
 
     /* Read the log-line file */
     BytesRead = LOG_PRINT_LINENO_HEXDIGITS;
-    Status = LogLineFileProtocol->Read(LogLineFileProtocol, 
+    Status = LogLineFileProtocol->Read(LogLineFileProtocol,
                                         &BytesRead, lineNumberHexBuf);
     if( EFI_ERROR(Status) || (BytesRead != LOG_PRINT_LINENO_HEXDIGITS) ){
         lineNumberAcc = 0;
         Status = EFI_NOT_READY;
-        goto exit0;
+        goto exit1;
     }
 
     /* Convert line number from hex */
     lineNumberAcc = 0;
     for( i = 0; i < LOG_PRINT_LINENO_HEXDIGITS; i++){
         if( (lineNumberHexBuf[i] >= '0') && (lineNumberHexBuf[i] <= '9') )
-            lineNumberAcc = (lineNumberAcc << 4) 
+            lineNumberAcc = (lineNumberAcc << 4)
                                 + lineNumberHexBuf[i] - '0';
         else if( (lineNumberHexBuf[i] >= 'A') && (lineNumberHexBuf[i] <= 'F') )
-            lineNumberAcc = (lineNumberAcc << 4) 
+            lineNumberAcc = (lineNumberAcc << 4)
                                 + lineNumberHexBuf[i] - 'A' + 10;
         else if( (lineNumberHexBuf[i] >= 'a') && (lineNumberHexBuf[i] <= 'f') )
-            lineNumberAcc = (lineNumberAcc << 4) 
+            lineNumberAcc = (lineNumberAcc << 4)
                                 + lineNumberHexBuf[i] - 'a' + 10;
         else{
             /* The line number is not valid */
             lineNumberAcc = 0;
             Status = EFI_NOT_READY;
-            goto exit0;
+            goto exit1;
         }
     }
 
@@ -102,43 +105,50 @@ static EFI_STATUS LogPrint_file_getline( IN LogPrint_state_t *statep )
         Status = EFI_NOT_READY;
     }
 
-exit0:
+exit1:
     /* Close the file */
     LogLineFileProtocol->Close( LogLineFileProtocol );
-
+exit0:
     /* Set the log line */
-    statep->logline = lineNumberAcc;
+    *logline_p = lineNumberAcc;
 
     return Status;
 }
 
 static EFI_STATUS LogPrint_file(IN LogPrint_state_t *statep,
                                 IN CHAR8*           Buffer,
-                                IN UINTN            Length, 
+                                IN UINTN            Length,
                                 OUT UINTN           *Printedp)
 {
     EFI_STATUS  Status;
-
+    UINT16  logline;
     UINT16  filename[8];
 
     UINTN Printed = 0;
 
+    /* Get the line number */
+    Status = LogPrint_file_getline(statep, &logline);
+    if( EFI_ERROR(Status) )
+        goto exit0;
+
     /* Form the log-file name */
-    UnicodeSPrint(filename, sizeof(filename), L"%03d.txt", statep->logline);
+    UnicodeSPrint(filename, sizeof(filename), L"%03d.txt", logline);
 
     /* Write the buffer out to the log file. */
-    Status = Common_CreateWriteCloseFile(   statep->logdir, filename,
-                                            Buffer, Length );
+    Status = Common_CreateWriteCloseFile(   statep->logdir,
+                                            filename,
+                                            Buffer,
+                                            Length);
     if( EFI_ERROR(Status) )
         goto exit0;
 
     /* If Common_CreateWriteCloseFile succeeded, the full buffer was written */
     Printed = Length;
 
-    /* Increment the line number 
+    /* Increment the line number
         (not more than 512 lines upto 512-bytes each ~1MB total on FAT fs ) */
-    statep->logline = (statep->logline + 1) & LOG_PRINT_LINENO_MAX_MASK;
-    Status = LogPrint_file_setline( statep );
+    logline = (logline + 1) & LOG_PRINT_LINENO_MAX_MASK;
+    Status = LogPrint_file_setline(statep,  logline);
 
 exit0:
     *Printedp = Printed;
@@ -149,6 +159,7 @@ static EFI_STATUS LogPrint_init_file(   IN LogPrint_state_t     *statep,
                                         IN EFI_FILE_PROTOCOL    *logdir )
 {
     EFI_STATUS Status;
+    UINT16  logline;
 
     /* Validate argument */
     if( NULL == logdir )
@@ -157,20 +168,18 @@ static EFI_STATUS LogPrint_init_file(   IN LogPrint_state_t     *statep,
     /* Check that the LogDir is in fact a directory by attempting to read the
        line file and then attempting to write it. */
     statep->logdir = logdir;
-    LogPrint_file_getline( statep );
+    LogPrint_file_getline(statep, &logline);
 
-    /*  On failure, statep->logline should be zero. Otherwise, statep->logline
+    /*  On failure, logline should be zero. Otherwise, logline
         should be corretcly set. Attempt to write it back out. */
-    Status = LogPrint_file_setline( statep );
-    if( EFI_ERROR(Status) ){
+    Status = LogPrint_file_setline(statep, logline);
+    if( EFI_ERROR(Status) )
         /* If this fails, the requested log directory is not writable */
         statep->logdir = NULL;
-        statep->logline = 0;
-    } else {
+    else
         /*  Otherwise, the requested log directory IS writable. Set FILE as a
             valid logging mode. */
         statep->modes = statep->modes | LOG_PRINT_MODE_FILE;
-    }
 
     return Status;
 }
@@ -263,7 +272,7 @@ static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
         Status = EFI_INVALID_PARAMETER;
         goto exit0;
     }
-    
+
     /* Check the Format argument alignment */
     if( 0 != ( ((UINTN)Format) & (sizeof(UINT16) - 1) ) ){
         Status = EFI_INVALID_PARAMETER;
@@ -296,14 +305,14 @@ static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
     Printed = LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC);
 
     /* Write the line to the buffer */
-    Printed += AsciiVSPrintUnicodeFormat(   Buffer + Printed, 
+    Printed += AsciiVSPrintUnicodeFormat(   Buffer + Printed,
                                             BufferSize - Printed,
                                             Format, Marker );
 
     /* Add a new-line character and NULL terminated */
     Buffer[Printed++] = '\n';
     Buffer[Printed] = '\0';
-    
+
     /* Return Success */
     Status = EFI_SUCCESS;
 
@@ -347,7 +356,7 @@ UINTN EFIAPI LogPrint(  IN LogPrint_state_t *statep,
     if( EFI_ERROR(Status) ){
         TimeStamp = (EFI_TIME){0};
     }
-    
+
     /* Get the Varriable-Argument list */
     VA_START (Marker, Format);
 
@@ -359,7 +368,7 @@ UINTN EFIAPI LogPrint(  IN LogPrint_state_t *statep,
         Ret = 0;
         goto exit0;
     }
-    
+
     /*  Assume that the full printed string will be completely writtten to all
         logs*/
     Ret = PrintedToBuffer;
@@ -398,7 +407,6 @@ EFI_STATUS EFIAPI LogPrint_init(IN OUT LogPrint_state_t *statep,
     /* Initialize statep */
     statep->modes   = 0;
     statep->logdir  = NULL;
-    statep->logline = 0;
 
     /* Check that only valid bits are set in modes */
     if( 0 != (modes & (~LOG_PRINT_MODE_VALID)) )
@@ -415,7 +423,7 @@ EFI_STATUS EFIAPI LogPrint_init(IN OUT LogPrint_state_t *statep,
     /* If none of the modes are supported, return failure */
     if( 0 == modes )
         return EFI_UNSUPPORTED;
-    
+
     return EFI_SUCCESS;
 }
 

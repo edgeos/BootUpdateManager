@@ -17,10 +17,9 @@ typedef UINT8   LogPrint_mode_t;
 typedef struct LogPrint_state_s {
     LogPrint_mode_t     modes;
     EFI_FILE_PROTOCOL   *logdir;
-    UINT16              logline;
 } LogPrint_state_t;
 
-#define ZERO_LOG_PRINT_STATE() {0, NULL, 0}
+#define ZERO_LOG_PRINT_STATE() {0, NULL}
 
 UINTN EFIAPI LogPrint(  IN LogPrint_state_t *state_p,
                         IN CONST CHAR16  *Format,
