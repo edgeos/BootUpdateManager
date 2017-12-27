@@ -239,20 +239,24 @@ static EFI_STATUS LogPrint_close_console( IN LogPrint_state_t *statep )
 /*  Helper functions and definitions.                                         */
 /******************************************************************************/
 
-#define LOG_PRINT_LINE_PREFIX_FORMAT L"%04d-%02d-%02d %02d:%02d:%02d %016llx) "
-/* The fixed length of the prefix line given the above format. */
+#define LOG_PRINT_LINE_PREFIX_FORMAT L"%04d-%02d-%02d %02d:%02d:%02d %016llx %s) "
+/* The fixed length of the prefix line given the above format (minus the context). */
 #define LOG_PRINT_LINE_PREFIX_LENGTH ( (4 + 1 + 2 + 1 + 2) + 1 + (2+1+2+1+2) \
-                                        + 1 + 16 + 1 + 1 )
-#define LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC) \
+                                        + 1 + 16 + 1 + 1 + 1 )
+/* Maximum allowed length for the context */
+#define LOG_PRINT_LINE_CONTEXT_MAXLENGTH (80 - LOG_PRINT_LINE_PREFIX_LENGTH)
+
+#define LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC, Context) \
             AsciiSPrintUnicodeFormat(   Buffer, BufferSize, \
                                         LOG_PRINT_LINE_PREFIX_FORMAT, \
                                         TimeStampp->Year,   TimeStampp->Month,\
                                         TimeStampp->Day,\
                                         TimeStampp->Hour,   TimeStampp->Minute,\
-                                        TimeStampp->Second, TSC )
+                                        TimeStampp->Second, TSC, Context )
 
 static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
                                     IN  UINT64          TSC,
+                                    IN  CHAR16*         Context,
                                     IN  CONST CHAR16*   Format,
                                     IN  VA_LIST         Marker,
                                     OUT UINTN           *BufferSizep,
@@ -284,7 +288,7 @@ static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
 
     /* Add the additional length for the line prefix and new-line character and
         NULL terminator */
-    BufferSize = BufferSize + LOG_PRINT_LINE_PREFIX_LENGTH + 1 + 1;
+    BufferSize = BufferSize + LOG_PRINT_LINE_PREFIX_LENGTH + StrLen(Context) + 1 + 1;
 
     /* Return EFI_UNSUPPORTED if the output string is too large. */
     MaxLen = PcdGet32(PcdMaximumUnicodeStringLength);
@@ -302,7 +306,7 @@ static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
     }
 
     /* Write the line prefix to the buffer */
-    Printed = LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC);
+    Printed = LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC, Context);
 
     /* Write the line to the buffer */
     Printed += AsciiVSPrintUnicodeFormat(   Buffer + Printed,
@@ -361,7 +365,7 @@ UINTN EFIAPI LogPrint(  IN LogPrint_state_t *statep,
     VA_START (Marker, Format);
 
     /* Parse the format string and other arguments to get a CHAR8 buffer */
-    Status = LogPrint_buffer(   &TimeStamp, TimeStamp_TSC,
+    Status = LogPrint_buffer(   &TimeStamp, TimeStamp_TSC, statep->context,
                                 Format, Marker,
                                 &BufferSize, &Buffer, &PrintedToBuffer);
     if( EFI_ERROR(Status) ){
@@ -398,15 +402,19 @@ exit0:
 
 EFI_STATUS EFIAPI LogPrint_init(IN OUT LogPrint_state_t *statep,
                                 IN LogPrint_mode_t      modes,
-                                IN EFI_FILE_PROTOCOL    *logdir )
+                                IN EFI_FILE_PROTOCOL    *logdir,
+                                IN CHAR16               *context)
 {
     /* Make sure that statep is a valid pointer */
     if( NULL == statep )
         return EFI_INVALID_PARAMETER;
-
+    /* Make sure the context label is smaller than the maximum supported */
+    if(StrLen(context) > LOG_PRINT_LINE_CONTEXT_MAXLENGTH)
+        return EFI_INVALID_PARAMETER;
     /* Initialize statep */
     statep->modes   = 0;
     statep->logdir  = NULL;
+    statep->context = context;
 
     /* Check that only valid bits are set in modes */
     if( 0 != (modes & (~LOG_PRINT_MODE_VALID)) )

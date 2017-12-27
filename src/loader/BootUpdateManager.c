@@ -825,7 +825,9 @@ static EFI_STATUS BUM_LogPrint_close( void )
 static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
 {
     EFI_STATUS Status;
-    static CHAR16 *LogDirPath;
+    CHAR16 *LogDirPath;
+    CHAR16 *Context;
+
     LogPrint_mode_t logmode = LOG_PRINT_MODE_CONSOLE;
 
     /*  Close any previous logging state. Even if the logging-state was
@@ -835,6 +837,7 @@ static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
 
     /*  Always request console-based logging. */
     logmode = LOG_PRINT_MODE_CONSOLE;
+    Context = L"unknown";
 
     /*  A bit more work for file-based logging. */
     if( EnableFileLogging ){
@@ -845,15 +848,19 @@ static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
             case BUM_LOADEDIMAGE_ROOT:
             case BUM_LOADEDIMAGE_UNKNOWN:
                 LogDirPath = ROOT_BUMLOG_PATH;
+                Context = L"root";
                 break;
             case BUM_LOADEDIMAGE_PRIM:
                 LogDirPath = PRIMARY_BUMLOG_PATH;
+                Context = L"primary";
                 break;
             case BUM_LOADEDIMAGE_BACK:
                 LogDirPath = BACKUP_BUMLOG_PATH;
+                Context = L"backup";
                 break;
             default:
                 LogDirPath = NULL;
+                Context = L"unknown";
                 logmode = LOG_PRINT_MODE_CONSOLE;
                 break;
         }
@@ -875,7 +882,7 @@ static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
     }
 
     /*  Initialize the logging code. */
-    Status = LogPrint_init( &logstate, logmode, LogDir );
+    Status = LogPrint_init( &logstate, logmode, LogDir, Context);
 
     /*  Even if LogPrint_init fails, the modes field inside logstate should be
         zero, and logstate should still be usable with LogPrint with no
