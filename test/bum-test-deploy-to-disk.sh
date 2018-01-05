@@ -20,6 +20,7 @@ mkdir -p "test/espmount"
 sudo mount ${installdev} "test/espmount/"
 sudo rm -rf "test/espmount/"*
 sudo tar -zxvf "test/testesp.tar.gz" -C "test/espmount"
+sudo sync
 sudo umount "test/espmount"
 rmdir "test/espmount/"
 
