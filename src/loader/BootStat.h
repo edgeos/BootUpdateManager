@@ -27,8 +27,6 @@ typedef enum {
 #define BOOTSTAT_BMAP_FULL          ((1 <<  BOOTSTAT_ENUM_COUNT) - 1)
 #define BOOTSTAT_BMAP_VALID         BOOTSTAT_BMAP_FULL
 
-EFI_STATUS EFIAPI ReportBootStat(   IN UINT64               BootStat_bitmap,
-                                    IN EFI_FILE_PROTOCOL    *BootStat_dir,
-                                    IN LogPrint_state_t     *logstatep_l );
+EFI_STATUS EFIAPI ReportBootStat(IN UINT64               BootStat_bitmap);
 
 #endif

@@ -20,66 +20,6 @@ static EFI_GUID gEfiBUMVariableGuid = { 0x3B56CA66, 0x94B1, 0x11E6,
                                                 { 0x98, 0x06, 0xD8, 0x9D,
                                                   0x67, 0xF4, 0x0B, 0xD7 } };
 
-#define BUM_LOADEDIMAGE_STATE_VARNAME L"BUM_LOADEDIMAGE_STATE"
-
-typedef enum {
-    BUM_LOADEDIMAGE_FWTOROOT = 0,
-    BUM_LOADEDIMAGE_ROOTTOPRIM = 1,
-    BUM_LOADEDIMAGE_PRIMTOBACK = 2,
-    BUM_LOADEDIMAGE_PRIMTOGRUB = 3,
-    BUM_LOADEDIMAGE_ROOTTOBACK = 4,
-    BUM_LOADEDIMAGE_BACKTOGRUB = 5,
-    BUM_LOADEDIMAGE_FAIL = 6,
-    BUM_LOADEDIMAGE_STATE_COUNT
-} BUM_LOADEDIMAGE_STATE_t;
-
-#define BUM_LOADEDIMAGE_STATE_SIZE (sizeof(BUM_LOADEDIMAGE_STATE_t))
-
-typedef enum {
-    BUM_LOADEDIMAGE_ROOT,
-    BUM_LOADEDIMAGE_PRIM,
-    BUM_LOADEDIMAGE_BACK,
-    BUM_LOADEDIMAGE_UNKNOWN,
-    BUM_LOADEDIMAGE_TYPE_COUNT
-} BUM_LOADEDIMAGE_TYPE_t;
-
-static BUM_LOADEDIMAGE_TYPE_t BUM_STATE_TO_TYPE_TABLE[BUM_LOADEDIMAGE_STATE_COUNT] =
-        {   BUM_LOADEDIMAGE_ROOT, /* FWTOROOT */
-            BUM_LOADEDIMAGE_PRIM, /* ROOTTOPRIM */
-            BUM_LOADEDIMAGE_BACK, /* PRIMTOBACK */
-            BUM_LOADEDIMAGE_BACK, /* PRIMTOGRUB (actually means GRUBTOBACK) */
-            BUM_LOADEDIMAGE_BACK, /* ROOTTOBACK */
-            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOGRUB <This is an error> */
-            BUM_LOADEDIMAGE_UNKNOWN,/* BACKTOGRUB <This is an error> */
-        };
-
-/*  Boot-status directory is common to all image types. The image that runs
-    last will have its state in the boot-status directory. */
-#define BOOTSTAT_PATH   L"\\bootstatus"
-
-#define ROOT_BUMLOG_PATH    L"\\root\\log"
-
-/* Load path compare strings for boot from "primary" directory.
- *  Grub can mix forward slash and back slash in chainloader so check 2 types.
- */
-#define PRIMARY_BUMLOG_PATH   L"\\primary\\log"
-
-/* Load path compare strings for boot from "backup" directory.
- *  Grub can mix forward slash and back slash in chainloader so check 2 types.
- */
-#define BACKUP_BUMLOG_PATH   L"\\backup\\log"
-
-/* - key-update mechanism is a mail-box mechanism
-   - key-update operations are requested by the OS placing an appropriately
-     named *.auth file in the appropriate key directory.
-   - when attempting a boot path (primary or backup), BUM will check the key
-     directory for *.auth files.
-   - when a *.auth file is found, BUM will attempt a key-update based on the
-     file name.
-   - if the key-update operation succeeds, the corresponding *.auth file will
-     be deleted to prevent repeated update attempts with the same *.auth file.
-*/
-
 typedef enum {
     BUM_KEYUPDATE_PK_UPDAT,
     BUM_KEYUPDATE_KEK_UPDAT,
@@ -148,7 +88,7 @@ static UINT32 BUM_KEYUPDATE_ATTRIBUTE_LIST[BUM_KEYUPDATE_TYPE_COUNT] =
 #define BUM_LOG_FILE_ENABLE   TRUE /*  Set TRUE to write BUM output to a log
                                        file */
 
-#define BUM_LOG( format, ... ) LogPrint( &logstate, format, ##__VA_ARGS__ )
+#define BUM_LOG( format, ... ) LogPrint( format, ##__VA_ARGS__ )
 
 /* (un|)comment the following to (en|dis)able TSC-based timing of the
    SetVariable operation
@@ -160,10 +100,6 @@ static UINT32 BUM_KEYUPDATE_ATTRIBUTE_LIST[BUM_KEYUPDATE_TYPE_COUNT] =
 
 static EFI_HANDLE gLoadedImageHandle;
 static EFI_LOADED_IMAGE_PROTOCOL *gLoadedImageProtocol = NULL;
-static BUM_LOADEDIMAGE_TYPE_t gLoadedImageType = BUM_LOADEDIMAGE_ROOT;
-
-static LogPrint_state_t logstate = ZERO_LOG_PRINT_STATE();
-static EFI_FILE_PROTOCOL *LogDir = NULL;
 
 /******************************************************************************/
 /*  Miscellaneous functions                                                   */
@@ -269,120 +205,6 @@ static VOID BUM_printVarInfo(   EFI_GUID *guid_p, CHAR16 *name_p,
 }
 
 /******************************************************************************/
-/*  Functions for finding loaded-image state and type                         */
-/******************************************************************************/
-
-/* Set the UEFI LdImageState varriable */
-static EFI_STATUS EFIAPI BUM_setLdImageState( IN BUM_LOADEDIMAGE_STATE_t state )
-{
-    EFI_STATUS Status;
-
-    /* Validate the input */
-    if( (state < BUM_LOADEDIMAGE_FWTOROOT)
-        || (state >= BUM_LOADEDIMAGE_STATE_COUNT) ){
-        BUM_LOG(L"BUM_setLdImageState: invalid state %d", state );
-        return EFI_INVALID_PARAMETER;
-    }
-
-    /* Write the state */
-    Status = gRT->SetVariable(  BUM_LOADEDIMAGE_STATE_VARNAME,
-                                &gEfiBUMVariableGuid,
-                                EFI_VARIABLE_BOOTSERVICE_ACCESS,
-                                sizeof(BUM_LOADEDIMAGE_STATE_t), &state);
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_setLdImageState: gRT->SetVariable failed with error"
-                L"(%d) for variable: ", Status );
-        BUM_printVarInfo(   &gEfiBUMVariableGuid, BUM_LOADEDIMAGE_STATE_VARNAME,
-                            EFI_VARIABLE_BOOTSERVICE_ACCESS,
-                            sizeof(BUM_LOADEDIMAGE_STATE_t) );
-    }
-
-    return Status;
-}
-
-/* Validate the UEFI LdImageState varriable and get its value */
-static EFI_STATUS EFIAPI BUM_getLdImageState( OUT BUM_LOADEDIMAGE_STATE_t *statep )
-{
-    EFI_STATUS Status;
-
-    BUM_LOADEDIMAGE_STATE_t state;
-
-    UINT32  statevar_attributes;
-    UINTN   statevar_size = sizeof(state);
-
-    /* Get current varriable info. */
-    Status = gRT->GetVariable(  BUM_LOADEDIMAGE_STATE_VARNAME,
-                                &gEfiBUMVariableGuid,
-                                &statevar_attributes, &statevar_size, &state);
-    /*  There is an error if there is a failure to read the varriable and it
-        isn't because variable is not found. Also, there is an error if the
-        variable is not of the appropriate size or attribute. It is not an
-        error if the variable is not found; it indicates the FWTOROOT state.
-        */
-    if( EFI_ERROR(Status) && (Status != EFI_NOT_FOUND) ){
-        BUM_LOG(L"BUM_getLdImageState: gRT->GetVariable failed with error"
-                L"(%d) for variable: ", Status );
-        BUM_printVarInfo(   &gEfiBUMVariableGuid, BUM_LOADEDIMAGE_STATE_VARNAME,
-                            statevar_attributes,
-                            sizeof(BUM_LOADEDIMAGE_STATE_t) );
-        /* since we can't determine our state propperly, set the FAIL state */
-        state = BUM_LOADEDIMAGE_FAIL;
-    } else if ( Status == EFI_NOT_FOUND ){
-        /* Initialize the variable to FWTOROOT state */
-        state = BUM_LOADEDIMAGE_FWTOROOT;
-        Status = BUM_setLdImageState( state );
-        if( EFI_ERROR(Status) )
-            BUM_LOG(L"BUM_getLdImageState: BUM_setLdImageState failed with "
-                    L"error (%d) for state %d", Status, state );
-    } else /* ( ! EFI_ERROR(Status) ) */ {
-        if( ( statevar_size != sizeof(BUM_LOADEDIMAGE_STATE_t) )
-            || ( statevar_attributes != EFI_VARIABLE_BOOTSERVICE_ACCESS ) ){
-            BUM_LOG(L"BUM_getLdImageState: invalid size or attribute for "
-                    L"variable: ");
-            BUM_printVarInfo(   &gEfiBUMVariableGuid, BUM_LOADEDIMAGE_STATE_VARNAME,
-                                statevar_attributes,
-                                sizeof(BUM_LOADEDIMAGE_STATE_t) );
-            /*  if the state varriable has inappropriate size or attribute,
-                the BUM didn't write it, and the varibale should be considered
-                compromised. */
-            Status = EFI_COMPROMISED_DATA;
-            /*  since we can't determine our state propperly, set the
-                FAIL state */
-            state = BUM_LOADEDIMAGE_FAIL;
-        }
-        if( (state < BUM_LOADEDIMAGE_FWTOROOT )
-            || (state >= BUM_LOADEDIMAGE_STATE_COUNT) ){
-            /*  if the state varriable has inappropriate value, the BUM
-                didn't write it, and the varibale should be considered
-                compromised. */
-            BUM_LOG(L"BUM_getLdImageState: invalid state %d", state );
-            /*  since we can't determine our state propperly, set the
-                FAIL state */
-            state = BUM_LOADEDIMAGE_FAIL;
-            Status = EFI_COMPROMISED_DATA;
-        }
-    }
-
-    /* output state and return status */
-    *statep = state;
-    return Status;
-}
-
-static EFI_STATUS EFIAPI BUM_setLoadedImageType( void )
-{
-    EFI_STATUS Status;
-    BUM_LOADEDIMAGE_STATE_t state;
-    Status = BUM_getLdImageState( &state );
-    if( EFI_ERROR(Status) ){
-        BUM_LOG(L"BUM_setLoadedImageType: BUM_getLdImageState failed with "
-                    L"error (%d)", Status);
-        gLoadedImageType = BUM_LOADEDIMAGE_UNKNOWN;
-    } else
-        gLoadedImageType = BUM_STATE_TO_TYPE_TABLE[state];
-    return Status;
-}
-
-/******************************************************************************/
 /*  Cur-config functions                                                     */
 /******************************************************************************/
 
@@ -401,8 +223,8 @@ typedef enum {
 
 static CHAR16* BUM_CURIMAGE_TYPE_TEXT[BUM_CURIMAGE_TYPE_COUNT+1]
                 = { L"Root BUM",
-                    L"Configuration BUM",
-                    L"Configuration Payload",
+                    L"Config BUM",
+                    L"Config Payload",
                     L"Unknown" };
 
 static EFI_STATUS EFIAPI BUM_parseConfigVarValue(
@@ -761,145 +583,6 @@ static EFI_STATUS BUM_loadKeys( IN CHAR16 *KeyDirPathText )
 }
 
 /******************************************************************************/
-/*  Boot-Status reporting function and helper functions                       */
-/******************************************************************************/
-
-static EFI_STATUS BUM_ReportBootStatus( void )
-{
-    EFI_STATUS Status, CloseStatus;
-    EFI_FILE_PROTOCOL *BootStatDir;
-
-    /* Open the log directory from the boot directory. */
-    Status = Common_CreateOpenFile( &BootStatDir,
-                                    BOOTSTAT_PATH,
-                                    ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
-                                    EFI_FILE_DIRECTORY);
-    if( EFI_ERROR(Status) ){
-        /*  If the log directory fails to open, then disable file-based
-            logging. */
-        BUM_LOG(L"BUM_ReportBootStatus: Common_CreateOpenFile failed for the "
-                L"boot-state directory \"%s\"", BOOTSTAT_PATH);
-        return Status;
-    }
-
-    Status = ReportBootStat(    BOOTSTAT_BMAP_FULL, BootStatDir,
-                                &logstate );
-    if( EFI_ERROR(Status) )
-        BUM_LOG(L"BUM_ReportBootStatus: ReportBootStat failed");
-
-    CloseStatus = BootStatDir->Close( BootStatDir );
-    if( EFI_ERROR(CloseStatus) )
-        BUM_LOG(L"BUM_ReportBootStatus: Close failed for the boot-state"
-                L" directory \"%s\"", BOOTSTAT_PATH);
-
-    if( EFI_ERROR(Status) )
-        return Status;
-    else
-        return CloseStatus;
-}
-
-/******************************************************************************/
-/*  Logging related Initialization and Cleanup                                */
-/******************************************************************************/
-
-static EFI_STATUS BUM_LogPrint_close( void )
-{
-    EFI_STATUS Status1, Status2;
-
-    /* Close all logging modes. */
-    Status1 = LogPrint_close( &logstate );
-
-    /* If a logging directory was openned, close it. */
-    if( NULL != LogDir ){
-        Status2 = LogDir->Close( LogDir );
-        LogDir = NULL;
-    } else
-        Status2 = EFI_SUCCESS;
-
-    if( EFI_ERROR(Status1) )
-        return Status1;
-    else
-        return Status2;
-}
-
-static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
-{
-    EFI_STATUS Status;
-    CHAR16 *LogDirPath;
-    CHAR16 *Context;
-
-    LogPrint_mode_t logmode = LOG_PRINT_MODE_CONSOLE;
-
-    /*  Close any previous logging state. Even if the logging-state was
-        previously all zero or LogPrint_close was called on it, the effect of
-        this call should be benign. */
-    BUM_LogPrint_close( );
-
-    /*  Always request console-based logging. */
-    logmode = LOG_PRINT_MODE_CONSOLE;
-    Context = L"unknown";
-
-    /*  A bit more work for file-based logging. */
-    if( EnableFileLogging ){
-
-        /* Select the path of the log directory based on the boot path. */
-        logmode |= LOG_PRINT_MODE_FILE;
-        switch( gLoadedImageType ){
-            case BUM_LOADEDIMAGE_ROOT:
-            case BUM_LOADEDIMAGE_UNKNOWN:
-                LogDirPath = ROOT_BUMLOG_PATH;
-                Context = L"root";
-                break;
-            case BUM_LOADEDIMAGE_PRIM:
-                LogDirPath = PRIMARY_BUMLOG_PATH;
-                Context = L"primary";
-                break;
-            case BUM_LOADEDIMAGE_BACK:
-                LogDirPath = BACKUP_BUMLOG_PATH;
-                Context = L"backup";
-                break;
-            default:
-                LogDirPath = NULL;
-                Context = L"unknown";
-                logmode = LOG_PRINT_MODE_CONSOLE;
-                break;
-        }
-
-        if( logmode & LOG_PRINT_MODE_FILE ){
-            /* Open the log directory from the boot directory. */
-            Status = Common_CreateOpenFile( &LogDir,
-                                            LogDirPath,
-                                            ( EFI_FILE_MODE_READ |
-                                                EFI_FILE_MODE_WRITE),
-                                            EFI_FILE_DIRECTORY);
-            if( EFI_ERROR(Status) ){
-                /*  If the log directory fails to open, then disable file-based
-                    logging. */
-                logmode = LOG_PRINT_MODE_CONSOLE;
-                LogDir = NULL;
-            }
-        }
-    }
-
-    /*  Initialize the logging code. */
-    Status = LogPrint_init( &logstate, logmode, LogDir, Context);
-
-    /*  Even if LogPrint_init fails, the modes field inside logstate should be
-        zero, and logstate should still be usable with LogPrint with no
-        effect. */
-
-    /*  If there is no file-based logging and the log directory is open,
-        close it. */
-    if( ((logmode & LOG_PRINT_MODE_FILE) == 0) && ( NULL != LogDir ) ){
-        LogDir->Close( LogDir );
-        LogDir = NULL;
-    }
-
-    /* Return the return value from LogPrint_init */
-    return Status;
-}
-
-/******************************************************************************/
 /*  Initialization and Cleanup                                                */
 /******************************************************************************/
 
@@ -907,9 +590,7 @@ static EFI_STATUS BUM_LogPrint_init( BOOLEAN EnableFileLogging )
 static EFI_STATUS BUM_init( IN EFI_HANDLE LoadedImageHandle )
 {
     EFI_STATUS Status;
-
     gLoadedImageHandle = LoadedImageHandle;
-
     /* Use the loaded-image handle to open the loaded-image protocol */
     Status = gBS->OpenProtocol( LoadedImageHandle,
                                 &gEfiLoadedImageProtocolGuid,
@@ -917,74 +598,38 @@ static EFI_STATUS BUM_init( IN EFI_HANDLE LoadedImageHandle )
                                 LoadedImageHandle,
                                 NULL,
                                 EFI_OPEN_PROTOCOL_BY_HANDLE_PROTOCOL);
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_init: gBS->OpenProtocol failed for "
-                L"LoadedImageProtocol");
-        return Status;
+    if(!EFI_ERROR(Status)){
+        /* Open the root directory of the boot partition for file operations. */
+        Status = Common_FileOpsInit(gLoadedImageProtocol->DeviceHandle);
+        if(!EFI_ERROR(Status)){
+            /*  Setup logging */
+            LogPrint_init();
+            Status = EFI_SUCCESS;
+        }
     }
-
-    /* Determine the load-path of the image (primary/backup/other). */
-    Status = BUM_setLoadedImageType();
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_init: BUM_setLoadedImageType failed");
-        return Status;
-    }
-
-    /* Open the root directory of the boot partition for file operations. */
-    Status = Common_FileOpsInit(gLoadedImageProtocol->DeviceHandle);
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_init: Common_FileOpsInit failed");
-        return Status;
-    }
-
-    /* OpenRootDir succeeded. */
-    /* Reset the logging code to use file-based logging as well. */
-    Status = BUM_LogPrint_init( BUM_LOG_FILE_ENABLE );
-    if( EFI_ERROR(Status) )
-        BUM_LOG(L"BUM_init: 'BUM_LogPrint_init( TRUE )' failed");
-
-    return EFI_SUCCESS;
+    return Status;
 }
 
 /* Perform clean-up operations, undo initialization operations in reverse */
 static EFI_STATUS BUM_fini( void )
 {
     EFI_STATUS Status;
-
-    /*  Close file-based logging but maintain console-based logging. */
-    Status = BUM_LogPrint_init( FALSE );
-    if( EFI_ERROR(Status) )
-        BUM_LOG(L"BUM_fini: 'BUM_LogPrint_init( FALSE )' failed");
-
     /* Close the root directory of the boot partition */
     Status = Common_FileOpsClose( );
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_fini: Common_FileOpsClose failed");
-        return Status;
+    if(!EFI_ERROR(Status)){
+        /* Close the loaded-image protocol */
+        Status = gBS->CloseProtocol( gLoadedImageHandle,
+                                    &gEfiLoadedImageProtocolGuid,
+                                    gLoadedImageHandle,
+                                    NULL);
+        if(!EFI_ERROR(Status)){
+            /* Reset the protocol interface pointer and image handle to NULL */
+            gLoadedImageProtocol = NULL;
+            gLoadedImageHandle = NULL;
+            Status = EFI_SUCCESS;
+        }
     }
-
-    /* Reset the loaded-image type to the default value */
-    gLoadedImageType = BUM_LOADEDIMAGE_ROOT;
-
-    /* Close the loaded-image protocol */
-    Status = gBS->CloseProtocol( gLoadedImageHandle,
-                                &gEfiLoadedImageProtocolGuid,
-                                gLoadedImageHandle,
-                                NULL);
-    if( EFI_ERROR (Status) ){
-        BUM_LOG(L"BUM_fini: gBS->CloseProtocol failed for "
-                L"LoadedImageProtocol");
-        return Status;
-    }
-
-    /* Reset the protocol interface pointer and image handle to NULL */
-    gLoadedImageProtocol = NULL;
-    gLoadedImageHandle = NULL;
-
-    /* Close all logging. */
-    BUM_LogPrint_close( );
-
-    return EFI_SUCCESS;
+    return Status;
 }
 
 
@@ -993,62 +638,6 @@ static EFI_STATUS BUM_fini( void )
 /******************************************************************************/
 
 #define KEYDIR_NAME "keys"
-#define PATHLEN_MAX (512)
-
-static EFI_STATUS EFIAPI BUM_GetPathFromParts(  IN  CHAR8   *DirPath,
-                                                IN  CHAR8   *FileName,
-                                                OUT CHAR16  **Path_p)
-{
-    EFI_STATUS ret;
-    UINTN DirPath_len, FileName_len, Path_len;
-    CHAR16 *Path;
-    /*  Get lengths of the two strings to be generated */
-    DirPath_len = AsciiStrnLenS(DirPath, PATHLEN_MAX);
-    FileName_len = AsciiStrnLenS(FileName, PATHLEN_MAX);
-    Path_len = DirPath_len + 1 + FileName_len;
-    if(PATHLEN_MAX < Path_len){
-        BUM_LOG(L"BUM_GetPathFromParts: total path length (%d) too large",
-                Path_len);
-        ret = EFI_UNSUPPORTED;
-        goto exit0;
-    }
-    /*  Allocate space for Path */
-    ret = gBS->AllocatePool(EfiLoaderData,
-                            (Path_len+1)*sizeof(CHAR16),
-                            (VOID**)&Path);
-    if(EFI_ERROR(ret)){
-        BUM_LOG(L"BUM_GetPathFromParts: gBS->AllocatePool failed");
-        goto exit0;
-    }
-    /*  Generate the path */
-    ret = AsciiStrToUnicodeStrS(DirPath,
-                                Path,
-                                DirPath_len+1);
-    if(EFI_ERROR(ret)){
-        BUM_LOG(L"BUM_GetPathFromParts: AsciiStrToUnicodeStrS failed "
-                L"for directory path");
-        goto exit1;
-    }
-    Path[DirPath_len] = L'\\';
-    ret = AsciiStrToUnicodeStrS(FileName,
-                                &(Path[DirPath_len+1]),
-                                FileName_len+1);
-    if(EFI_ERROR(ret)){
-        BUM_LOG(L"BUM_GetPathFromParts: AsciiStrToUnicodeStrS failed"
-                L"for file name");
-        goto exit1;
-    }
-    /*  Set output variables */
-    *Path_p = Path;
-exit1:
-    if(EFI_ERROR(ret)){
-        EFI_STATUS c_ret = gBS->FreePool(Path);
-        if(EFI_ERROR(c_ret))
-            BUM_LOG(L"BUM_GetPathFromParts: gBS->FreePool failed");
-    }
-exit0:
-    return ret;
-}
 
 static EFI_STATUS EFIAPI BUM_GetImageKeyDirPath(IN  CHAR8   *ConfigDirPath,
                                                 IN  CHAR8   *ImageName,
@@ -1057,19 +646,19 @@ static EFI_STATUS EFIAPI BUM_GetImageKeyDirPath(IN  CHAR8   *ConfigDirPath,
 {
     EFI_STATUS ret;
     CHAR16 *KeydirPath, *ImagePath;
-    ret = BUM_GetPathFromParts( ConfigDirPath,
-                                KEYDIR_NAME,
-                                &KeydirPath);
+    ret = Common_GetPathFromParts(  ConfigDirPath,
+                                    KEYDIR_NAME,
+                                    &KeydirPath);
     if(EFI_ERROR(ret))
-        BUM_LOG(L"BUM_GetImageKeyDirPath: BUM_GetPathFromParts failed"
+        BUM_LOG(L"BUM_GetImageKeyDirPath: Common_GetPathFromParts failed"
                 L"for the key directory.");
     else{
-        ret = BUM_GetPathFromParts( ConfigDirPath,
-                                    ImageName,
-                                    &ImagePath);
+        ret = Common_GetPathFromParts(  ConfigDirPath,
+                                        ImageName,
+                                        &ImagePath);
         if(EFI_ERROR(ret)){
             EFI_STATUS cleanup_ret;
-            BUM_LOG(L"BUM_GetImageKeyDirPath: BUM_GetPathFromParts failed"
+            BUM_LOG(L"BUM_GetImageKeyDirPath: Common_GetPathFromParts failed"
                     L"for the image path.");
             cleanup_ret = gBS->FreePool(KeydirPath);
             if(EFI_ERROR(cleanup_ret))
@@ -1183,35 +772,26 @@ static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR8        *ConfigDirPath,
     return ret;
 }
 
-static EFI_STATUS EFIAPI BUM_SetStateBootImage( 
+static EFI_STATUS EFIAPI BUM_SetConfigBootImage(
                                 IN  EFI_HANDLE LoadedImageHandle,
-                                IN  BUM_LOADEDIMAGE_STATE_t State,
                                 IN  BUM_CURIMAGE_TYPE_t imgtype,
                                 IN  CHAR8 Config[static BUMSTATE_CONFIG_MAXLEN], 
                                 IN  BOOLEAN ReportBootStatus )
 {
     EFI_STATUS ret;
-    /*FIXME*/
-    BUM_setCurConfig(   imgtype,
-                        Config);
-    /*end FIXME*/
-    /*  Set the UEFI LdImageState varriable.
-        We don't want to load an image without setting the state first since
-        the loaded image will not behave correctly without the propper state.
-        If we fail to set the state, mark this as a fatal error and abort the
-        boot.*/
-    ret = BUM_setLdImageState( State );
+    ret = BUM_setCurConfig( imgtype,
+                            Config);
     if(EFI_ERROR(ret)){
-        BUM_LOG(L"BUM_SetStateBootImage: BUM_setLdImageState "
-                L"failed (%d) for state %d",  ret, State);
+        BUM_LOG(L"BUM_SetStateBootImage: BUM_setCurConfig "
+                L"failed (%d) for Config \"%a\"", ret, Config);
         /*  FIXME: UnloadImage
             cleanup_ret = */
     }else{
         /* Report Boot Status if requested */
         if(ReportBootStatus){
-            ret = BUM_ReportBootStatus();
+            ret = ReportBootStat(BOOTSTAT_BMAP_FULL);
             if(EFI_ERROR(ret))
-                BUM_LOG(L"BUM_SetStateBootImage: BUM_ReportBootStatus failed");
+                BUM_LOG(L"BUM_SetStateBootImage: ReportBootStat failed");
         }
         BUM_LOG(L"    Starting image ...");
         ret = gBS->StartImage(LoadedImageHandle, NULL, NULL);
@@ -1229,7 +809,6 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
                                 IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN],
                                 IN  CHAR8   *ImageName,
                                 IN  BUM_CURIMAGE_TYPE_t imgtype,
-                                IN  BUM_LOADEDIMAGE_STATE_t State,
                                 IN  BOOLEAN  LoadKeysByDefault,
                                 IN  BOOLEAN  ReportBootStatus )
 {
@@ -1246,11 +825,10 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
 
     }else{
         /*  Boot the image. */
-        ret = BUM_SetStateBootImage(LoadedImageHandle,
-                                    State,
-                                    imgtype,
-                                    Config,
-                                    ReportBootStatus);
+        ret = BUM_SetConfigBootImage(   LoadedImageHandle,
+                                        imgtype,
+                                        Config,
+                                        ReportBootStatus);
         if(EFI_ERROR(ret))
             BUM_LOG(L"BUM_loadKeysSetStateBootImage: "
                     L"BUM_SetStateBootImage failed (%d)", ret);
@@ -1279,7 +857,6 @@ EFI_STATUS BUM_config_main( IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN])
     ret = BUM_loadKeysSetStateBootImage(Config,
                                         PAYLOAD_IMAGENAME,
                                         BUM_CURIMAGE_CFGPLD,
-                                        BUM_LOADEDIMAGE_PRIMTOGRUB,
                                         TRUE,
                                         TRUE);
     if(EFI_ERROR(ret)){
@@ -1298,7 +875,6 @@ EFI_STATUS BUM_root_main( VOID )
     ret = BUM_loadKeysSetStateBootImage(PrimaryConfig,
                                         BUM_IMAGENAME,
                                         BUM_CURIMAGE_CFGBUM,
-                                        BUM_LOADEDIMAGE_ROOTTOPRIM,
                                         FALSE,
                                         FALSE);
     if(EFI_ERROR(ret)){
@@ -1307,7 +883,6 @@ EFI_STATUS BUM_root_main( VOID )
         ret = BUM_loadKeysSetStateBootImage(BackupConfig,
                                             BUM_IMAGENAME,
                                             BUM_CURIMAGE_CFGBUM,
-                                            BUM_LOADEDIMAGE_ROOTTOBACK,
                                             FALSE,
                                             FALSE);
         if(EFI_ERROR(ret)){
@@ -1327,9 +902,7 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
     EFI_STATUS FuncStatus;
     BUM_CURIMAGE_TYPE_t imgtype = BUM_CURIMAGE_TYPE_COUNT;
     CHAR8   ConfigLocal[BUMSTATE_CONFIG_MAXLEN]= "\0";
-    /*  Setup initial console-based logging */
-    BUM_LogPrint_init( FALSE );
-    BUM_LOG( L"initializing BUM logging ... " );
+
     FuncStatus = BUM_init(LoadedImageHandle);
     if(EFI_ERROR(FuncStatus)){
         AppStatus = FuncStatus;
@@ -1348,8 +921,7 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         BUM_LOG(L"BUM_main: BUM_getCurConfig failed with status (%d)\n",
                 AppStatus);
     }else{
-        BUM_LOG(L"    Loaded-image Type (New): %s",
-                BUM_CURIMAGE_TYPE_TEXT[imgtype]);
+        LogPrint_setContextLabel(BUM_CURIMAGE_TYPE_TEXT[imgtype]);
         switch(imgtype){
             case BUM_CURIMAGE_ROOTBUM:
                 /*  This is the root BUM. */
@@ -1372,9 +944,6 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
                 break;
         }
     }
-    /*  Attempt to set the EFI State Varriable.
-        Already in failure mode, so return value doesn't matter. */
-    BUM_setLdImageState(BUM_LOADEDIMAGE_FAIL);
     FuncStatus = BUM_fini();
     if(EFI_ERROR(FuncStatus)){
         /*  The status error from BUM_fini is only important if there were no

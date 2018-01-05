@@ -83,6 +83,47 @@ EFI_STATUS EFIAPI Common_FileOpsClose( VOID )
     return Status;
 }
 
+#define PATHLEN_MAX (512)
+
+EFI_STATUS EFIAPI Common_GetPathFromParts(  IN  CHAR8   *DirPath,
+                                            IN  CHAR8   *FileName,
+                                            OUT CHAR16  **Path_p)
+{
+    EFI_STATUS ret;
+    UINTN DirPath_len, FileName_len, Path_len;
+    CHAR16 *Path;
+    /*  Get lengths of the two strings to be generated */
+    DirPath_len = AsciiStrnLenS(DirPath, PATHLEN_MAX);
+    FileName_len = AsciiStrnLenS(FileName, PATHLEN_MAX);
+    Path_len = DirPath_len + 1 + FileName_len;
+    if(PATHLEN_MAX < Path_len)
+        ret = EFI_UNSUPPORTED;
+    else{
+        /*  Allocate space for Path */
+        ret = gBS->AllocatePool(EfiLoaderData,
+                                (Path_len+1)*sizeof(CHAR16),
+                                (VOID**)&Path);
+        if(!EFI_ERROR(ret)){
+            /*  Generate the path */
+            ret = AsciiStrToUnicodeStrS(DirPath,
+                                        Path,
+                                        DirPath_len+1);
+            if(!EFI_ERROR(ret)){
+                Path[DirPath_len] = L'\\';
+                ret = AsciiStrToUnicodeStrS(FileName,
+                                            &(Path[DirPath_len+1]),
+                                            FileName_len+1);
+            }
+            /*  Free the buffer or assign it to the output variable */
+            if(EFI_ERROR(ret))
+                gBS->FreePool(Path);
+            else
+                *Path_p = Path;
+        }
+    }
+    return ret;
+}
+
 EFI_STATUS EFIAPI Common_CreateOpenFile(OUT EFI_FILE_PROTOCOL   **NewHandle,
                                         IN  CHAR16              *FileName,
                                         IN  UINT64              OpenMode,
@@ -268,8 +309,7 @@ exit0:
     return Status;
 }
 
-EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL *dir_p,
-                                                IN CHAR16 *filename,
+EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN CHAR16 *filename,
                                                 IN VOID*  buffer,
                                                 IN UINTN  buffersize)
 {
@@ -277,15 +317,46 @@ EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL *dir_p,
     EFI_FILE_PROTOCOL *filep;
 
     /* Open file */
-    Status = dir_p->Open( dir_p, &filep, filename,
-                            ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE
-                                | EFI_FILE_MODE_CREATE ), 0 );
+    Status = Common_CreateOpenFile( &filep,
+                                    filename,
+                                    (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
+                                    0);
     if( EFI_ERROR(Status) ){
         goto exit0;
     }
 
     /* Write out to file */
     Status = Common_WriteFile( filep, buffer, buffersize);
+
+    /* close file */
+    CloseStatus = filep->Close( filep );
+    if( EFI_ERROR(CloseStatus) )
+        if( ! EFI_ERROR(Status) )
+            Status = CloseStatus;
+exit0:
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN  CHAR16      *filename,
+                                            OUT VOID*       *buffer_p,
+                                            OUT UINTN       *buffersize_p)
+{
+    EFI_STATUS Status, CloseStatus;
+    EFI_FILE_PROTOCOL *filep;
+
+    /* Open file */
+    Status = Common_CreateOpenFile( &filep,
+                                    filename,
+                                    (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
+                                    0);
+    if( EFI_ERROR(Status) ){
+        goto exit0;
+    }
+
+    /* Read the file */
+    Status = Common_ReadFile(   filep,
+                                buffer_p,
+                                buffersize_p);
 
     /* close file */
     CloseStatus = filep->Close( filep );

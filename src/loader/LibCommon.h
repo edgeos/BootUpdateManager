@@ -18,6 +18,12 @@ EFI_STATUS EFIAPI Common_FileOpsInit(   EFI_HANDLE  BootPartHandle);
 
 EFI_STATUS EFIAPI Common_FileOpsClose( VOID );
 
+#define PATHLEN_MAX (512)
+
+EFI_STATUS EFIAPI Common_GetPathFromParts(  IN  CHAR8   *DirPath,
+                                            IN  CHAR8   *FileName,
+                                            OUT CHAR16  **Path_p);
+
 EFI_STATUS EFIAPI Common_CreateOpenFile(OUT EFI_FILE_PROTOCOL   **NewHandle,
                                         IN  CHAR16              *FileName,
                                         IN  UINT64              OpenMode,
@@ -39,9 +45,12 @@ EFI_STATUS EFIAPI Common_WriteFile( IN EFI_FILE_PROTOCOL    *filep,
                                     IN VOID*                buffer,
                                     IN UINTN                buffersize );
 
-EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL    *dir_p,
-                                                IN CHAR16               *filename,
-                                                IN VOID*                buffer,
-                                                IN UINTN                buffersize );
+EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN CHAR16   *filename,
+                                                IN VOID*    buffer,
+                                                IN UINTN    buffersize );
+
+EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN  CHAR16      *filename,
+                                            OUT VOID*       *buffer_p,
+                                            OUT UINTN       *buffersize_p );
 
 #endif

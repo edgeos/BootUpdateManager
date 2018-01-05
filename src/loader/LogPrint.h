@@ -12,25 +12,14 @@
 #define LOG_PRINT_MODE_VALID    (0x3)
 #define LOG_PRINT_MODE_CONSOLE  (0x2)
 #define LOG_PRINT_MODE_FILE     (0x1)
-typedef UINT8   LogPrint_mode_t;
 
-typedef struct LogPrint_state_s {
-    LogPrint_mode_t     modes;
-    EFI_FILE_PROTOCOL   *logdir;
-    CHAR16              *context;
-} LogPrint_state_t;
+EFI_STATUS LogPrint_setModes(UINT16 setmodes);
 
-#define ZERO_LOG_PRINT_STATE() {0, NULL, NULL}
+EFI_STATUS LogPrint_setContextLabel(const CHAR16 *setcontext);
 
-UINTN EFIAPI LogPrint(  IN LogPrint_state_t *state_p,
-                        IN CONST CHAR16  *Format,
+UINTN EFIAPI LogPrint(  IN CONST CHAR16  *Format,
                         ... );
 
-EFI_STATUS EFIAPI LogPrint_init(IN OUT LogPrint_state_t *statep,
-                                IN LogPrint_mode_t      modes,
-                                IN EFI_FILE_PROTOCOL    *logdir,
-                                IN CHAR16               *context);
-
-EFI_STATUS EFIAPI LogPrint_close(   IN OUT LogPrint_state_t *statep );
+VOID EFIAPI LogPrint_init(VOID);
 
 #endif
