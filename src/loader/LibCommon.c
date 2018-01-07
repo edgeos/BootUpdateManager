@@ -356,10 +356,9 @@ EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN  CHAR16      *filepath,
     EFI_FILE_PROTOCOL *filep;
 
     /* Open file */
-    Status = Common_CreateOpenFile( &filep,
-                                    filepath,
-                                    (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
-                                    0);
+    Status = Common_OpenFile(   &filep,
+                                filepath,
+                                EFI_FILE_MODE_READ);
     if( EFI_ERROR(Status) ){
         goto exit0;
     }
