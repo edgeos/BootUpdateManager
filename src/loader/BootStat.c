@@ -24,45 +24,30 @@ EFI_STATUS BootStat_CreateDir(VOID)
                                     ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
                                     EFI_FILE_DIRECTORY);
     if(EFI_ERROR(Status))
-        LogPrint(L"BootStat_CreateDir: Common_GetPathFromParts failed (%d)",
+        LogPrint(L"BootStat_CreateDir: Common_CreateOpenFile failed (%d)",
                     Status);
     else{
         Status = BootStatDir->Close( BootStatDir );
         if(EFI_ERROR(Status))
-            LogPrint(L"BootStat_CreateDir: Common_GetPathFromParts failed (%d)",
+            LogPrint(L"BootStat_CreateDir: BootStatDir->Close failed (%d)",
                         Status);
     }
     return Status;
 }
 
-EFI_STATUS BootStat_ReportToFile(  IN CHAR8   *filename,
+EFI_STATUS BootStat_ReportToFile(   IN CHAR8   *filename,
                                     IN VOID*    buffer,
                                     IN UINTN    buffersize )
 {
-    EFI_STATUS Status, FreeStatus;
-    CHAR16 *filepath;
+    EFI_STATUS Status;
     /*  generate path */
-    Status = Common_GetPathFromParts(   BOOTSTATDIR,
-                                        filename,
-                                        &filepath);
+    Status = Common_CreateWriteCloseDirFile(BOOTSTATDIR,
+                                            filename,
+                                            buffer,
+                                            buffersize);
     if(EFI_ERROR(Status))
-        LogPrint(L"BootStat_ReportToFile: Common_GetPathFromParts failed (%d)",
-                    Status);
-    else{
-        /*  call write-to-file function with path */
-        Status = Common_CreateWriteCloseFile(filepath, buffer, buffersize);
-        if(EFI_ERROR(Status))
-            LogPrint(L"BootStat_ReportToFile: Common_CreateWriteCloseFile "\
-                        L"failed (%d)", Status);
-        /*  free path buffer */
-        FreeStatus = gBS->FreePool(filepath);
-        if(EFI_ERROR(FreeStatus)){
-            LogPrint(L"BootStat_ReportToFile: gBS->FreePool failed (%d)",
-                        Status);
-            if(!EFI_ERROR(Status))
-                Status = FreeStatus;
-        }
-    }
+        LogPrint(L"BootStat_ReportToFile: Common_CreateWriteCloseDirFile "
+                    L"failed (%d)", Status);
     return Status;
 }
 

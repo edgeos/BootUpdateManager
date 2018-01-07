@@ -524,7 +524,8 @@ static EFI_STATUS BUM_loadKeyFromFile(  BUM_KEYUPDATE_TYPE_t updateType,
 
 /*exit2*/
     /* If control reaches here, read had succeeded, free the read buffer. */
-    FreePoolStat = gBS->FreePool(KeyFileBuffer);
+    FreePoolStat = Common_FreeReadBuffer(   KeyFileBuffer,
+                                            KeyFileBufferSize);
     if( EFI_ERROR(FreePoolStat) ){
         BUM_LOG(L"BUM_loadKeyFromFile: gBS->FreePool failed for the"
                 L"key-file buffer");
@@ -660,9 +661,9 @@ static EFI_STATUS EFIAPI BUM_GetImageKeyDirPath(IN  CHAR8   *ConfigDirPath,
             EFI_STATUS cleanup_ret;
             BUM_LOG(L"BUM_GetImageKeyDirPath: Common_GetPathFromParts failed"
                     L"for the image path.");
-            cleanup_ret = gBS->FreePool(KeydirPath);
+            cleanup_ret = Common_FreePath(KeydirPath);
             if(EFI_ERROR(cleanup_ret))
-                BUM_LOG(L"BUM_GetImageKeyDirPath: gBS->FreePool failed");
+                BUM_LOG(L"BUM_GetImageKeyDirPath: Common_FreePath failed");
         }else{
             *ImagePath_p = ImagePath;
             *KeydirPath_p= KeydirPath;
@@ -676,13 +677,15 @@ static EFI_STATUS EFIAPI BUM_FreeImageKeyDirPath(   IN  CHAR16  *ImagePath,
                                                     IN  CHAR16  *KeydirPath)
 {
     EFI_STATUS ret1, ret2;
-    ret1 = gBS->FreePool(ImagePath);
+    ret1 = Common_FreePath(ImagePath);
     if(EFI_ERROR(ret1)){
-        BUM_LOG(L"BUM_FreeImageKeyDirPath: gBS->FreePool failed for ImagePath");
+        BUM_LOG(L"BUM_FreeImageKeyDirPath: Common_FreePath failed "
+                L"for ImagePath");
     }
-    ret2 = gBS->FreePool(KeydirPath);
+    ret2 = Common_FreePath(KeydirPath);
     if(EFI_ERROR(ret2)){
-        BUM_LOG(L"BUM_FreeImageKeyDirPath: gBS->FreePool failed");
+        BUM_LOG(L"BUM_FreeImageKeyDirPath: Common_FreePath failed"
+                L"for KeydirPath");
     }
     return EFI_ERROR(ret1)? ret1 : ret2;
 }

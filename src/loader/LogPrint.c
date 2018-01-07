@@ -83,7 +83,7 @@ static EFI_STATUS LogPrint_file_setline(IN UINT16 logline)
 
 static EFI_STATUS LogPrint_file_getline(OUT UINT16 *logline_p)
 {
-    EFI_STATUS  Status;
+    EFI_STATUS  Status, FreeStatus;
     UINTN i;
     UINT16 lineNumberAcc;
     CHAR8   *lineNumberHexBuf;
@@ -121,6 +121,12 @@ static EFI_STATUS LogPrint_file_getline(OUT UINT16 *logline_p)
             lineNumberAcc = 0;
             Status = EFI_NOT_READY;
         }
+        /* Free the line-number hex buffer */
+        FreeStatus = Common_FreeReadBuffer( lineNumberHexBuf,
+                                            lineNumberHexBufSize);
+        if(EFI_ERROR(FreeStatus))
+            if(!EFI_ERROR(Status))
+                Status = FreeStatus;
     }
     /* Set the log line */
     *logline_p = lineNumberAcc;
