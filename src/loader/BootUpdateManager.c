@@ -917,11 +917,10 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
     BUM_LOG(L"    Boot Update Manager" );
     BUM_LOG(L"****************************************"
             L"****************************************" );
-    BUM_LOG(L"");
     AppStatus = BUM_getCurConfig(  &imgtype,
                                    ConfigLocal);
     if(EFI_ERROR(AppStatus)){
-        BUM_LOG(L"BUM_main: BUM_getCurConfig failed with status (%d)\n",
+        BUM_LOG(L"BUM_main: BUM_getCurConfig failed with status (%d)",
                 AppStatus);
     }else{
         LogPrint_setContextLabel(BUM_CURIMAGE_TYPE_TEXT[imgtype]);
@@ -929,7 +928,7 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
             case BUM_CURIMAGE_ROOTBUM:
                 /*  This is the root BUM. */
                 AppStatus = BUM_root_main();
-                BUM_LOG(L"BUM_main: BUM_root_main failed with status (%d)\n",
+                BUM_LOG(L"BUM_main: BUM_root_main failed with status (%d)",
                         AppStatus);
                 break;
             case BUM_CURIMAGE_CFGBUM:
@@ -937,7 +936,7 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
                         ConfigLocal);
                 /*  This is a configuration BUM. */
                 AppStatus = BUM_config_main(ConfigLocal);
-                BUM_LOG(L"BUM_main: BUM_config_main failed with status (%d)\n",
+                BUM_LOG(L"BUM_main: BUM_config_main failed with status (%d)",
                         AppStatus);
                 break;
             default:

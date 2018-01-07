@@ -19,7 +19,7 @@
 #define LOG_PRINT_LINE_CONTEXT_MAXLENGTH (80 - LOG_PRINT_LINE_PREFIX_LENGTH)
 
 #define LOG_PRINT_MODE_DEFAULT  (LOG_PRINT_MODE_FILE | LOG_PRINT_MODE_CONSOLE)
-#define LOG_PRINT_CTXLBL_DEFAULT    L"Unknown"
+#define LOG_PRINT_CTXLBL_DEFAULT    L""
 
 /******************************************************************************/
 /*  Functions and definitions related to logging to the file system           */
