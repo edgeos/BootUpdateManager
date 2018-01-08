@@ -36,20 +36,17 @@ static char* getBootStatusString(BUM_state_t *BUM_state_p)
     return StatusString;
 }
 
-static int runTimeInit( char *statusdir_name,
+static int runTimeInit( char *statedir_name,
                         char **StatusString_p)
 {
     int ret;
-    EFI_FILE_PROTOCOL *statusdir;
     BUM_state_t       *BUM_state_p;
     char *StatusString;
     EFI_STATUS stat;
     /*  Assume success */
     ret = 0;
-    /*  Acquire the status directory */
-    statusdir = GetDirFileProtocol(statusdir_name);
     /*  Acquire the BUM state */
-    stat = BUMState_Get(statusdir, &BUM_state_p);
+    stat = BUMState_Get(statedir_name, &BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Get failed\n");
         StatusString = FATALERROR;
@@ -61,7 +58,7 @@ static int runTimeInit( char *statusdir_name,
     /*  Perform the run-time logic. */
     BUMStateNext_RunTimeInit(BUM_state_p);
     /*  Save the BUM state */
-    stat = BUMState_Put(statusdir, BUM_state_p);
+    stat = BUMState_Put(statedir_name, BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Put failed\n");
         StatusString = FATALERROR;
@@ -82,7 +79,7 @@ exit0:
     return ret;
 }
 
-static const char *usage = "<BUM status directory>";
+static const char *usage = "<BUM state directory>";
 
 int main(int argc, char** argv)
 {
