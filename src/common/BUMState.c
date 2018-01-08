@@ -203,8 +203,8 @@ EFI_STATUS EFIAPI BUMState_Get( IN  CHAR8       *BootStatDirPath,
     return ret;
 }
 
-EFI_STATUS BUMState_Put(IN  CHAR8       *BootStatDirPath,
-                        IN  BUM_state_t *new_state_p)
+EFI_STATUS EFIAPI BUMState_Put( IN  CHAR8       *BootStatDirPath,
+                                IN  BUM_state_t *new_state_p)
 {
     EFI_STATUS ret;
     /*  Get the state pair */
@@ -265,9 +265,9 @@ VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
     BUM_state_p->DfltAttemptsRemaining = 0;
 }
 
-EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
-                                        IN  UINTN       AttemptCount,
-                                        IN  CHAR8       *UpdateConfig)
+EFI_STATUS EFIAPI BUMStateNext_CompleteUpdate(  IN  BUM_state_t *BUM_state_p,
+                                                IN  UINTN       AttemptCount,
+                                                IN  CHAR8       *UpdateConfig)
 {
     EFI_STATUS ret;
     /*  Only do the update if we are currently in AltrConfig */
@@ -288,7 +288,7 @@ exit0:
     return ret;
 }
 
-VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
+VOID EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p)
 {
     if(0 == BUM_state_p->DfltAttemptsRemaining)
         BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
@@ -298,7 +298,7 @@ VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
     }
 }
 
-VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
+VOID EFIAPI BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
 {
     if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig)
         BUM_state_p->DfltAttemptsRemaining = BUM_state_p->DfltAttemptCount;
@@ -306,7 +306,7 @@ VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
 }
 
 
-EFI_STATUS BUMState_getCurrConfig(
+EFI_STATUS EFIAPI BUMState_getCurrConfig(
                         IN  BUM_state_t  *BUM_state_p,
                         OUT CHAR8        Dst[static BUMSTATE_CONFIG_MAXLEN])
 {
@@ -318,7 +318,7 @@ EFI_STATUS BUMState_getCurrConfig(
     return CopyConfig(Dst, CurrConfig_p);
 }
 
-EFI_STATUS BUMState_getNonCurrConfig(
+EFI_STATUS EFIAPI BUMState_getNonCurrConfig(
                         IN  BUM_state_t *BUM_state_p,
                         OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN])
 {
