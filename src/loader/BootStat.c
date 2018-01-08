@@ -14,8 +14,7 @@
 
 #define BOOTSTATDIR "\\bootstatus"
 
-/**/
-EFI_STATUS BootStat_CreateDir(VOID)
+static EFI_STATUS BootStat_CreateDir(VOID)
 {
     EFI_STATUS Status;
     EFI_FILE_PROTOCOL *BootStatDir;
@@ -35,9 +34,9 @@ EFI_STATUS BootStat_CreateDir(VOID)
     return Status;
 }
 
-EFI_STATUS BootStat_ReportToFile(   IN CHAR8   *filename,
-                                    IN VOID*    buffer,
-                                    IN UINTN    buffersize )
+static EFI_STATUS BootStat_ReportToFile(IN CHAR8   *filename,
+                                        IN VOID*    buffer,
+                                        IN UINTN    buffersize )
 {
     EFI_STATUS Status;
     /*  generate path */
@@ -50,8 +49,6 @@ EFI_STATUS BootStat_ReportToFile(   IN CHAR8   *filename,
                     L"failed (%d)", Status);
     return Status;
 }
-
-#define BOOTSTAT_LOG( format, ... ) LogPrint( format, ##__VA_ARGS__ )
 
 static EFI_STATUS BootStat_TimeStamp( void )
 {
@@ -72,8 +69,8 @@ static EFI_STATUS BootStat_TimeStamp( void )
     /* Get the current time */
     Status = gRT->GetTime( &TimeStamp, NULL );
     if( EFI_ERROR(Status) ){
-        BOOTSTAT_LOG(   L"BootStat_TimeStamp: gRT->GetTime failed (%d). ",
-                        Status );
+        LogPrint(   L"BootStat_TimeStamp: gRT->GetTime failed (%d). ",
+                    Status );
         return Status;
     }
 
@@ -85,9 +82,9 @@ static EFI_STATUS BootStat_TimeStamp( void )
                                         TimeStamp.Hour,   TimeStamp.Minute,
                                         TimeStamp.Second, TimeStamp_TSC );
     if( TIME_STAMP_STRING_LENGTH != Printed ){
-        BOOTSTAT_LOG(   L"BootStat_TimeStamp: AsciiSPrintUnicodeFormat "
-                        L"returned (%d). Expected (%d).",
-                        Printed, TIME_STAMP_STRING_LENGTH );
+        LogPrint(   L"BootStat_TimeStamp: AsciiSPrintUnicodeFormat "
+                    L"returned (%d). Expected (%d).",
+                    Printed, TIME_STAMP_STRING_LENGTH );
         return Status;
     }
 
@@ -95,8 +92,8 @@ static EFI_STATUS BootStat_TimeStamp( void )
                                         TimeStampStringBuffer,
                                         TIME_STAMP_STRING_LENGTH);
     if( EFI_ERROR(Status) )
-        BOOTSTAT_LOG(   L"BootStat_TimeStamp: BootStat_ReportToFile"
-                        L" failed (%d)", Status);
+        LogPrint(   L"BootStat_TimeStamp: BootStat_ReportToFile"
+                    L" failed (%d)", Status);
     return Status;
 }
 
@@ -116,8 +113,8 @@ static EFI_STATUS BootStat_SmBiosInfo( void )
                                      &Versionp, &VersionLen,
                                      &ReleaseDatep, &ReleaseDateLen);
     if( EFI_ERROR(Status) ){
-        BOOTSTAT_LOG(   L"BootStat_SmBiosInfo: SMBIOS_RetrieveBIOSVersion"
-                        L" failed (%d)", Status);
+        LogPrint(   L"BootStat_SmBiosInfo: SMBIOS_RetrieveBIOSVersion"
+                    L" failed (%d)", Status);
         goto exit0;
     }
 
@@ -125,23 +122,23 @@ static EFI_STATUS BootStat_SmBiosInfo( void )
     Status = BootStat_ReportToFile("smbiosinfo_vendor",
                                     Vendorp, VendorLen);
     if( EFI_ERROR(Status) )
-        BOOTSTAT_LOG(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
-                        L" failed (%d) for vendor", Status);
+        LogPrint(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
+                    L" failed (%d) for vendor", Status);
 
     RetStatus = BootStat_ReportToFile("smbiosinfo_version",
                                         Versionp, VersionLen);
     if( EFI_ERROR(RetStatus) ){
         Status = RetStatus;
-        BOOTSTAT_LOG(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
-                        L" failed (%d) for version", Status);
+        LogPrint(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
+                    L" failed (%d) for version", Status);
     }
 
     RetStatus = BootStat_ReportToFile("smbiosinfo_releasedate",
                                         ReleaseDatep, ReleaseDateLen);
     if( EFI_ERROR(RetStatus) ){
         Status = RetStatus;
-        BOOTSTAT_LOG(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
-                        L" failed (%d) for release date", Status);
+        LogPrint(   L"BootStat_SmBiosInfo: BootStat_ReportToFile"
+                    L" failed (%d) for release date", Status);
     }
 
     /* Free all the allocated strings. */
@@ -172,42 +169,42 @@ static EFI_STATUS BootStat_UEFINVInfo( void )
                                     &RemainingVariableStorageSize,
                                     &MaximumVariableSize);
     if( EFI_ERROR(Status) ){
-        BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: gRT->QueryVariableInfo failed "
-                        L"(%d)", Status);
+        LogPrint(   L"BootStat_UEFINVInfo: gRT->QueryVariableInfo failed "
+                    L"(%d)", Status);
         goto exit0;
     }
 
-    BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: NVSize       = %d bytes",
-                    MaximumVariableStorageSize );
+    LogPrint(   L"BootStat_UEFINVInfo: NVSize       = %d bytes",
+                MaximumVariableStorageSize );
     CurrStatus = BootStat_ReportToFile("nvinfo_NVSize",
                                         &MaximumVariableStorageSize,
                                         sizeof(UINT64));
     if( EFI_ERROR(CurrStatus) ){
-        BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
-                        L"for \"nvinfo_NVSize\"" );
+        LogPrint(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
+                    L"for \"nvinfo_NVSize\"" );
         Status = CurrStatus;
     }
 
-    BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: NVRemaining  = %d bytes",
-                    RemainingVariableStorageSize );
+    LogPrint(   L"BootStat_UEFINVInfo: NVRemaining  = %d bytes",
+                RemainingVariableStorageSize );
     CurrStatus = BootStat_ReportToFile("nvinfo_NVRemaining",
                                         &RemainingVariableStorageSize,
                                         sizeof(UINT64));
     if( EFI_ERROR(CurrStatus) ){
-        BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
-                        L"for \"nvinfo_NVRemaining\"" );
+        LogPrint(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
+                    L"for \"nvinfo_NVRemaining\"" );
         if( !EFI_ERROR(Status) )
             Status = CurrStatus;
     }
 
-    BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: MaxVarSize   = %d bytes",
-                    MaximumVariableSize );
+    LogPrint(   L"BootStat_UEFINVInfo: MaxVarSize   = %d bytes",
+                MaximumVariableSize );
     CurrStatus = BootStat_ReportToFile("nvinfo_MaxVarSize",
                                         &MaximumVariableSize,
                                         sizeof(UINT64));
     if( EFI_ERROR(CurrStatus) ){
-        BOOTSTAT_LOG(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
-                        L"for \"nvinfo_MaxVarSize\"" );
+        LogPrint(   L"BootStat_UEFINVInfo: BootStat_ReportToFile failed "
+                    L"for \"nvinfo_MaxVarSize\"" );
         if( !EFI_ERROR(Status) )
             Status = CurrStatus;
     }
@@ -263,9 +260,9 @@ static inline EFI_STATUS BootStat_UEFIVar( BOOTSTAT_UEFIVAR_ENUM_t var_i )
             buffer = NULL;
             buffersize = 0;
         } else {
-            BOOTSTAT_LOG(   L"BootStat_UEFIVar: Common_ReadUEFIVariable "
-                            L"failed (%d) for \"%s\"",
-                            Status, BOOTSTAT_UEFIVAR_NAMES[ var_i ]);
+            LogPrint(   L"BootStat_UEFIVar: Common_ReadUEFIVariable "
+                        L"failed (%d) for \"%s\"",
+                        Status, BOOTSTAT_UEFIVAR_NAMES[ var_i ]);
             goto exit0;
         }
     }
@@ -276,17 +273,17 @@ static inline EFI_STATUS BootStat_UEFIVar( BOOTSTAT_UEFIVAR_ENUM_t var_i )
                                     "uefivars_%s",
                                     BOOTSTAT_UEFIVAR_NAMES[var_i] );
     if( (StatFileNameLen == 0) || (StatFileNameLen == IMAGENAME_MAX) ){
-        BOOTSTAT_LOG(   L"BootStat_UEFIVar: UnicodeSPrint failed to produce "
-                        L"file name for \"%s\"",
-                        BOOTSTAT_UEFIVAR_NAMES[ var_i ]);
+        LogPrint(   L"BootStat_UEFIVar: UnicodeSPrint failed to produce "
+                    L"file name for \"%s\"",
+                    BOOTSTAT_UEFIVAR_NAMES[ var_i ]);
         goto exit1;
     }
 
     /* Write the varriable to the file. */
     Status = BootStat_ReportToFile(StatFileName_l, buffer, buffersize);
     if( EFI_ERROR(Status) )
-        BOOTSTAT_LOG(   L"BootStat_UEFIVar: BootStat_ReportToFile failed (%d) "
-                        L"for \"%s\"", Status, StatFileName_l);
+        LogPrint(   L"BootStat_UEFIVar: BootStat_ReportToFile failed (%d) "
+                    L"for \"%s\"", Status, StatFileName_l);
 
 exit1:
     /* Free the UEFI varriable buffer. */
@@ -303,8 +300,8 @@ static EFI_STATUS BootStat_UEFIVars( void )
     for( var_i = 0; var_i < BOOTSTAT_UEFIVAR_COUNT; var_i++ ){
         Status = BootStat_UEFIVar( var_i );
         if( EFI_ERROR(Status) )
-            BOOTSTAT_LOG(   L"BootStat_UEFIVars: BootStat_UEFIVar failed (%d)"
-                            L" for %d", Status, var_i);
+            LogPrint(   L"BootStat_UEFIVars: BootStat_UEFIVar failed (%d)"
+                        L" for %d", Status, var_i);
     }
 
     return Status;
@@ -338,20 +335,20 @@ EFI_STATUS EFIAPI ReportBootStat(IN UINT64 BootStat_bitmap)
         Otherwise, we can't write anything else. */
     Status = BootStat_CreateDir();
     if(EFI_ERROR(Status))
-        BOOTSTAT_LOG(   L"ReportBootStat: BootStat_CreateDir failed (%d)",
-                        Status);
+        LogPrint(   L"ReportBootStat: BootStat_CreateDir failed (%d)",
+                    Status);
     else{
         for( i = 0; i < BOOTSTAT_ENUM_COUNT; i++ ){
             if( BootStat_bitmap & ((UINT64)1 << i) ){
                 if( ! BootStat_array[i].supported ){
-                    BOOTSTAT_LOG(   L"ReportBootStat: WARNING Status (%d) not "
-                                    L"supported", i );
+                    LogPrint(   L"ReportBootStat: WARNING Status (%d) not "
+                                L"supported", i );
                 } else {
                     Status = BootStat_array[i].report();
                     if( EFI_ERROR(Status) ){
-                        BOOTSTAT_LOG(   L"ReportBootStat: Failed to report "
-                                        L"status \"%s\" (%d)",
-                                        BootStat_array[i].name, i );
+                        LogPrint(   L"ReportBootStat: Failed to report "
+                                    L"status \"%s\" (%d)",
+                                    BootStat_array[i].name, i );
                     }
                 }
             }
