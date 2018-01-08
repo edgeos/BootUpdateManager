@@ -843,13 +843,9 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
 /*  Main                                                                      */
 /******************************************************************************/
 
-#define PRIMARY_CONFIGDIR   "primary"
-#define BACKUP_CONFIGDIR    "backup"
+#define BUM_STATEDIR        "\\bumstate"
 #define BUM_IMAGENAME       "bootx64.efi"
-#define PAYLOAD_IMAGENAME   "grubx64.efi"
-
-static CHAR8 PrimaryConfig[BUMSTATE_CONFIG_MAXLEN] = PRIMARY_CONFIGDIR;
-static CHAR8 BackupConfig[BUMSTATE_CONFIG_MAXLEN] = BACKUP_CONFIGDIR;
+#define PAYLOAD_IMAGENAME   "payload.efi"
 
 EFI_STATUS BUM_config_main( IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN])
 {
@@ -863,7 +859,7 @@ EFI_STATUS BUM_config_main( IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN])
                                         TRUE,
                                         TRUE);
     if(EFI_ERROR(ret)){
-        /*  Failed to boot the primary GRUB image. */
+        /*  Failed to boot the primary payload image. */
         BUM_LOG(L"BUM_config_main: BUM_loadKeysSetStateBootImage "
                 L"failed for \"%a\" (%d)", Config, ret);
     }
@@ -872,27 +868,44 @@ EFI_STATUS BUM_config_main( IN  CHAR8   Config[static BUMSTATE_CONFIG_MAXLEN])
 
 EFI_STATUS BUM_root_main( VOID )
 {
-    EFI_STATUS ret;
-    /*  Try to boot the primary UEFI application without loading keys
-        or setting boot status.*/
-    ret = BUM_loadKeysSetStateBootImage(PrimaryConfig,
-                                        BUM_IMAGENAME,
-                                        BUM_CURIMAGE_CFGBUM,
-                                        FALSE,
-                                        FALSE);
-    if(EFI_ERROR(ret)){
-        /* Try to boot the backup UEFI application without loading
-           keys or setting boot status. */
-        ret = BUM_loadKeysSetStateBootImage(BackupConfig,
-                                            BUM_IMAGENAME,
-                                            BUM_CURIMAGE_CFGBUM,
-                                            FALSE,
-                                            FALSE);
-        if(EFI_ERROR(ret)){
-            /* Failed to boot the backup UEFI application. */
-            BUM_LOG(L"BUM_main: All Root Load Attempts Failed");
-            BUM_LOG(L"BUM_main: BUM_loadKeysSetStateBootImage"
-                    L" final error value (%d)", ret);
+    EFI_STATUS ret, cleanup_ret;
+    BUM_state_t *BUM_state_p;
+    char Config[BUMSTATE_CONFIG_MAXLEN];
+    /*  Get the BUM state */
+    ret = BUMState_Get(BUM_STATEDIR, &BUM_state_p);
+    if(EFI_ERROR(ret))
+        BUM_LOG(L"BUM_root_main: BUMState_Get failed (%d)\n",
+                ret);
+    else{
+        /*  Perform the boot-time logic. */
+        BUMStateNext_BootTime(BUM_state_p);
+        /*  Get the actual configurtaion name from the state */
+        ret = BUMState_getCurrConfig(BUM_state_p, Config);
+        /*  Write the state back out to file */
+        cleanup_ret = BUMState_Put( BUM_STATEDIR,
+                                    BUM_state_p);
+        if(EFI_ERROR(cleanup_ret))
+            BUM_LOG(L"BUM_root_main: BUMState_Put failed (%d)\n",
+                    cleanup_ret);
+        /*  Free the state */
+        cleanup_ret = BUMState_Free(BUM_state_p);
+        if(EFI_ERROR(cleanup_ret))
+            BUM_LOG(L"BUM_root_main: BUMState_Free failed (%d)\n",
+                    cleanup_ret);
+        /*  Check if we successfully got the configurtaion name */
+        if(EFI_ERROR(ret))
+            BUM_LOG(L"BUM_root_main: BUMState_getCurrConfig failed (%d)\n",
+                    ret);
+        else{
+            /*  Try to boot the configurtaion-specific BUM image */
+            ret = BUM_loadKeysSetStateBootImage(Config,
+                                                BUM_IMAGENAME,
+                                                BUM_CURIMAGE_CFGBUM,
+                                                FALSE,
+                                                FALSE);
+            if(EFI_ERROR(ret))
+                BUM_LOG(L"BUM_root_main: BUM_loadKeysSetStateBootImage "
+                        L"failed (%d)\n", ret);
         }
     }
     return ret;
@@ -946,6 +959,7 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
                 break;
         }
     }
+    /*  Cleanup */
     FuncStatus = BUM_fini();
     if(EFI_ERROR(FuncStatus)){
         /*  The status error from BUM_fini is only important if there were no
@@ -953,6 +967,12 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         if(!EFI_ERROR(AppStatus))
             AppStatus = FuncStatus;
     }
+    /*  Reboot the system */
+    BUM_LOG(L"BUM_main: rebooting ... ");
+    gRT->ResetSystem(   EfiResetCold,
+                        AppStatus,
+                        0, NULL);
+    /*  Control hsould not reach here */
 exit0:
     return EFI_UNSUPPORTED;
 }
