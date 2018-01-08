@@ -420,9 +420,15 @@ EFI_STATUS EFIAPI Common_OpenReadCloseDirFile(  IN CHAR8    *dirpath,
                                     buffersize_p);
         /* Free the file path */
         CloseStatus = Common_FreePath(filepath);
-        if( EFI_ERROR(CloseStatus) )
-            if( ! EFI_ERROR(Status) )
+        if( EFI_ERROR(CloseStatus) ){
+            if( ! EFI_ERROR(Status) ){
+                Common_FreeReadBuffer(  *buffer_p,
+                                        *buffersize_p);
+                *buffer_p = NULL;
+                *buffersize_p = 0;
                 Status = CloseStatus;
+            }
+        }
     }
     return Status;
 }
