@@ -541,40 +541,57 @@ exit0:
     return Status;
 }
 
-static EFI_STATUS BUM_loadKeys( IN CHAR16 *KeyDirPathText )
+#define KEYDIR_NAME "keys"
+
+static EFI_STATUS BUM_loadKeys( IN CHAR8 *CfgDirPathText )
 {
     EFI_STATUS FuncStatus, RetStatus;
+    CHAR16 *KeyDirPathText;
     EFI_FILE_PROTOCOL *KeyDir = NULL;
     BUM_KEYUPDATE_TYPE_t i;
 
+    RetStatus = Common_GetPathFromParts(CfgDirPathText,
+                                        KEYDIR_NAME,
+                                        &KeyDirPathText);
     LogPrint(L"    Loading keys from \"%s\"", KeyDirPathText);
-
-    /* Open the key directory */
-    RetStatus = Common_OpenFile(&KeyDir,
-                                KeyDirPathText,
-                                ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE ));
-    if( EFI_ERROR(RetStatus) ){
-        LogPrint(L"BUM_loadKeys: Common_OpenFile failed for the key directory "\
-                    L"\"%s\"",
-                KeyDirPathText);
-        return RetStatus;
-    }
-
-    /*  Check for each possible key-update operation and perform it if
-        requested (i.e. if the corresponding *.auth file is found). */
-    for( i = BUM_KEYUPDATE_PK_UPDAT; i < BUM_KEYUPDATE_TYPE_COUNT; i++ ){
-        FuncStatus = BUM_loadKeyFromFile( i, KeyDir );
-        if( EFI_ERROR(FuncStatus) ){
-            LogPrint(L"BUM_loadKeys: BUM_loadKeyFromFile failed for"
-                        L" \"%s\\%s\"", KeyDirPathText,
-                    BUM_KEYUPDATE_FILE_NAMES[i] );
-            if( ! EFI_ERROR(RetStatus) )
+    if(EFI_ERROR(RetStatus))
+        LogPrint(L"BUM_loadKeys: Common_GetPathFromParts failed (%d) "
+                    L"for the config directory \"%s\"",
+                    CfgDirPathText);
+    else{
+        /* Open the key directory */
+        RetStatus = Common_OpenFile(&KeyDir,
+                                    KeyDirPathText,
+                                    (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE));
+        if( EFI_ERROR(RetStatus) )
+            LogPrint(L"BUM_loadKeys: Common_OpenFile failed (%d) "
+                        L"for the key directory \"%s\"",
+                        RetStatus, KeyDirPathText);
+        else{
+            /*  Check for each possible key-update operation and perform it if
+                requested (i.e. if the corresponding *.auth file is found). */
+            for(i = BUM_KEYUPDATE_PK_UPDAT; i < BUM_KEYUPDATE_TYPE_COUNT; i++){
+                FuncStatus = BUM_loadKeyFromFile( i, KeyDir );
+                if( EFI_ERROR(FuncStatus) ){
+                    LogPrint(L"BUM_loadKeys: BUM_loadKeyFromFile failed for"
+                                L" \"%s\\%s\"", KeyDirPathText,
+                            BUM_KEYUPDATE_FILE_NAMES[i] );
+                    if( ! EFI_ERROR(RetStatus) )
+                        RetStatus = FuncStatus;
+                }
+            }
+            /* Close the key directory. Close never fails. */
+            KeyDir->Close( KeyDir );
+        }
+        /*  Free the path string */
+        FuncStatus = Common_FreePath(KeyDirPathText);
+        if(EFI_ERROR(FuncStatus)){
+            LogPrint(L"BUM_loadKeys: Common_FreePath failed (%d)",
+                        FuncStatus);
+            if(!EFI_ERROR(RetStatus))
                 RetStatus = FuncStatus;
         }
     }
-
-    /* Close the key directory. Close never fails. */
-    KeyDir->Close( KeyDir );
     return RetStatus;
 }
 
@@ -632,86 +649,54 @@ static EFI_STATUS BUM_fini( void )
 /******************************************************************************/
 /*  Image-Booting Functions                                                   */
 /******************************************************************************/
-
-#define KEYDIR_NAME "keys"
-
-static EFI_STATUS EFIAPI BUM_GetImageKeyDirPath(IN  CHAR8   *ConfigDirPath,
-                                                IN  CHAR8   *ImageName,
-                                                OUT CHAR16  **ImagePath_p,
-                                                OUT CHAR16  **KeydirPath_p)
-{
-    EFI_STATUS ret;
-    CHAR16 *KeydirPath, *ImagePath;
-    ret = Common_GetPathFromParts(  ConfigDirPath,
-                                    KEYDIR_NAME,
-                                    &KeydirPath);
-    if(EFI_ERROR(ret))
-        LogPrint(L"BUM_GetImageKeyDirPath: Common_GetPathFromParts failed"
-                    L"for the key directory.");
-    else{
-        ret = Common_GetPathFromParts(  ConfigDirPath,
-                                        ImageName,
-                                        &ImagePath);
-        if(EFI_ERROR(ret)){
-            EFI_STATUS cleanup_ret;
-            LogPrint(L"BUM_GetImageKeyDirPath: Common_GetPathFromParts failed"
-                        L"for the image path.");
-            cleanup_ret = Common_FreePath(KeydirPath);
-            if(EFI_ERROR(cleanup_ret))
-                LogPrint(L"BUM_GetImageKeyDirPath: Common_FreePath failed");
-        }else{
-            *ImagePath_p = ImagePath;
-            *KeydirPath_p= KeydirPath;
-        }
-    }
-    /*  Generate the two strings */
-    return ret;
-}
-
-static EFI_STATUS EFIAPI BUM_FreeImageKeyDirPath(   IN  CHAR16  *ImagePath,
-                                                    IN  CHAR16  *KeydirPath)
-{
-    EFI_STATUS ret1, ret2;
-    ret1 = Common_FreePath(ImagePath);
-    if(EFI_ERROR(ret1)){
-        LogPrint(L"BUM_FreeImageKeyDirPath: Common_FreePath failed "
-                    L"for ImagePath");
-    }
-    ret2 = Common_FreePath(KeydirPath);
-    if(EFI_ERROR(ret2)){
-        LogPrint(L"BUM_FreeImageKeyDirPath: Common_FreePath failed"
-                    L"for KeydirPath");
-    }
-    return EFI_ERROR(ret1)? ret1 : ret2;
-}
-
-static EFI_STATUS EFIAPI BUM_LoadImage( IN  CHAR16      *ImagePathString,
+static EFI_STATUS EFIAPI BUM_LoadImage( IN CHAR8        *ConfigDirPath,
+                                        IN CHAR8        *ImageName,
                                         OUT EFI_HANDLE  *LoadedImageHandle_p)
 {
-    EFI_STATUS ret;
+    EFI_STATUS ret, cleanup_ret;
+    CHAR16 *ImagePathString;
     EFI_DEVICE_PATH_PROTOCOL *imageDPPp;
     EFI_HANDLE LoadedImageHandle;
-    /* Turn the CHAR16 file path into a popper DevicePathProtocol */
-    imageDPPp = FileDevicePath( gLoadedImageProtocol->DeviceHandle,
-                                ImagePathString);
-    if(NULL == imageDPPp){
-        LogPrint(L"BUM_LoadImage: FileDevicePath returned NULL");
-        ret = EFI_OUT_OF_RESOURCES;
-    }else{
-        /* Load the image using the DevicePathProtocol */
-        ret = gBS->LoadImage(   FALSE, /*   Request does not originate from the 
-                                            boot manager in the firmware. */
-                                gLoadedImageHandle,
-                                imageDPPp,
-                                NULL, 0, /* There are no images loaded in
-                                            memory */
-                                &LoadedImageHandle);
-        if(EFI_ERROR(ret))
-            LogPrint(L"BUM_LoadImage: gBS->LoadImage returned (%d) ",  ret);
-        else
-            *LoadedImageHandle_p = LoadedImageHandle;
-        /* Succeed or fail, the DevicePathProtocol should be freed. */
-        gBS->FreePool(imageDPPp);
+    /*  Generate the image path */
+    ret = Common_GetPathFromParts(  ConfigDirPath,
+                                    ImageName,
+                                    &ImagePathString);
+    if(EFI_ERROR(ret))
+        LogPrint(L"BUM_LoadImage: Common_GetPathFromParts failed (%d)",
+                    ret);
+    else{
+        LogPrint(L"    Loading image \"%s\" ... ", ImagePathString);
+        /* Turn the CHAR16 file path into a popper DevicePathProtocol */
+        imageDPPp = FileDevicePath( gLoadedImageProtocol->DeviceHandle,
+                                    ImagePathString);
+        if(NULL == imageDPPp){
+            LogPrint(L"BUM_LoadImage: FileDevicePath returned NULL");
+            ret = EFI_OUT_OF_RESOURCES;
+        }else{
+            /* Load the image using the DevicePathProtocol */
+            ret = gBS->LoadImage(   FALSE, /*   Request does not originate from
+                                                the boot manager in the
+                                                firmware. */
+                                    gLoadedImageHandle,
+                                    imageDPPp,
+                                    NULL, 0, /* There are no images loaded in
+                                                memory */
+                                    &LoadedImageHandle);
+            if(EFI_ERROR(ret))
+                LogPrint(L"BUM_LoadImage: gBS->LoadImage returned (%d) ",  ret);
+            else
+                *LoadedImageHandle_p = LoadedImageHandle;
+            /* Succeed or fail, the DevicePathProtocol should be freed. */
+            gBS->FreePool(imageDPPp);
+        }
+        /* Succeed or fail, the image path should be freed. */
+        cleanup_ret = Common_FreePath(ImagePathString);
+        if(EFI_ERROR(cleanup_ret)){
+            LogPrint(L"BUM_LoadImage: Common_FreePath returned (%d) ",
+                        cleanup_ret);
+            if(!EFI_ERROR(ret))
+                ret = cleanup_ret;
+        }
     }
     return ret;
 }
@@ -721,52 +706,38 @@ static EFI_STATUS EFIAPI BUM_LoadKeyLoadImage(  IN CHAR8        *ConfigDirPath,
                                                 IN BOOLEAN      LoadKeysByDefault,
                                                 IN EFI_HANDLE   *LoadedImageHandle_p)
 {
-    EFI_STATUS ret, LoadKey_ret, cleanup_ret;
-    CHAR16 *ImagePathString, *KeyDirPathString;
+    EFI_STATUS ret, LoadKey_ret;
     EFI_HANDLE LoadedImageHandle;
-    ret = BUM_GetImageKeyDirPath(   ConfigDirPath,
+
+    /*  Load keys by default if requested */
+    if(LoadKeysByDefault){
+        LoadKey_ret = BUM_loadKeys(ConfigDirPath);
+        /*  Failure in loading keys is not fatal */
+    }else
+        LoadKey_ret = EFI_SUCCESS;
+    /*  Make first attempt at loading the image */
+    ret = BUM_LoadImage(ConfigDirPath,
+                        ImageName,
+                        &LoadedImageHandle);
+    if(EFI_ERROR(ret)){
+        /*  Check if we already attempted to load keys */
+        if(!LoadKeysByDefault){
+            LoadKey_ret = BUM_loadKeys(ConfigDirPath);
+            if(!EFI_ERROR(LoadKey_ret))
+                ret = BUM_LoadImage(ConfigDirPath,
                                     ImageName,
-                                    &ImagePathString,
-                                    &KeyDirPathString);
-    if(EFI_ERROR(ret))
-        LogPrint(L"BUM_LoadKeyLoadImage: BUM_GetImageKeyDirPath failed (%d)",
-                    ret);
-    else {
-        LogPrint(L"    Loading image \"%s\" ... ", ImagePathString);
-        /*  Load keys by default if requested */
-        if(LoadKeysByDefault){
-            LoadKey_ret = BUM_loadKeys(KeyDirPathString);
-            /*  Failure in loading keys is not fatal */
-        }else
-            LoadKey_ret = EFI_SUCCESS;
-        /*  Make first attempt at loading the image */
-        ret = BUM_LoadImage(ImagePathString,
-                            &LoadedImageHandle);
-        if(EFI_ERROR(ret)){
-            /*  Check if we already attempted to load keys */
-            if(!LoadKeysByDefault){
-                LoadKey_ret = BUM_loadKeys(KeyDirPathString);
-                if(!EFI_ERROR(LoadKey_ret))
-                    ret = BUM_LoadImage(ImagePathString,
-                                        &LoadedImageHandle);
-            }
+                                    &LoadedImageHandle);
         }
-        /*  Report any loading errors */
-        if(EFI_ERROR(LoadKey_ret))
-            LogPrint(L"BUM_LoadKeyLoadImage: BUM_loadKeys failed for "
-                        L"\"%s\"",  KeyDirPathString);
-        if(EFI_ERROR(ret))
-            LogPrint(L"BUM_LoadKeyLoadImage: BUM_LoadImage failed for "
-                        L"\"%s\"",  ImagePathString);
-        else
-            *LoadedImageHandle_p = LoadedImageHandle;
-        /*  Free the path-string buffers */
-        cleanup_ret = BUM_FreeImageKeyDirPath(  ImagePathString,
-                                                KeyDirPathString);
-        if(EFI_ERROR(cleanup_ret))
-            LogPrint(L"BUM_LoadKeyLoadImage: BUM_FreeImageKeyDirPath "
-                        L"failed (%d)", cleanup_ret);
     }
+    /*  Report any loading errors */
+    if(EFI_ERROR(LoadKey_ret))
+        LogPrint(L"BUM_LoadKeyLoadImage: BUM_loadKeys failed for "
+                    L"\"%a\"",  ConfigDirPath);
+    if(EFI_ERROR(ret))
+        LogPrint(L"BUM_LoadKeyLoadImage: BUM_LoadImage failed for "
+                    L"\"%a\\%a\"",  ConfigDirPath, ImageName);
+    else
+        *LoadedImageHandle_p = LoadedImageHandle;
     return ret;
 }
 
@@ -782,8 +753,6 @@ static EFI_STATUS EFIAPI BUM_SetConfigBootImage(
     if(EFI_ERROR(ret)){
         LogPrint(L"BUM_SetStateBootImage: BUM_setCurConfig "
                     L"failed (%d) for Config \"%a\"", ret, Config);
-        /*  FIXME: UnloadImage
-            cleanup_ret = */
     }else{
         /* Report Boot Status if requested */
         if(ReportBootStatus){
@@ -796,10 +765,13 @@ static EFI_STATUS EFIAPI BUM_SetConfigBootImage(
         if(EFI_ERROR(ret)){
             LogPrint(L"BUM_SetStateBootImage: gBS->StartImage failed (%d)", ret);
         }
+        LogPrint(L"BUM_SetConfigBootImage: StartImage returned control ... ");
+        /*  If control reaches here, reboot the system */
+        LogPrint(L"BUM_SetConfigBootImage: rebooting ... ");
+        gRT->ResetSystem(   EfiResetCold,
+                            ret,
+                            0, NULL);
     }
-    /*  Control will reach here if gBS->StartImage failed or the loaded image
-        exited or returned. Either way, this is a failure. At some stage of
-        the boot, something failed to load. */
     return ret;
 }
 
@@ -827,9 +799,9 @@ EFI_STATUS EFIAPI BUM_loadKeysSetStateBootImage(
                                         imgtype,
                                         Config,
                                         ReportBootStatus);
-        if(EFI_ERROR(ret))
-            LogPrint(L"BUM_loadKeysSetStateBootImage: "
-                        L"BUM_SetStateBootImage failed (%d)", ret);
+        LogPrint(L"BUM_loadKeysSetStateBootImage: "
+                        L"BUM_SetStateBootImage returned (%d)", ret);
+        /*FIXME: unload image here */
     }
     return ret;
 }
@@ -962,12 +934,6 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         if(!EFI_ERROR(AppStatus))
             AppStatus = FuncStatus;
     }
-    /*  Reboot the system */
-    LogPrint(L"BUM_main: rebooting ... ");
-    gRT->ResetSystem(   EfiResetCold,
-                        AppStatus,
-                        0, NULL);
-    /*  Control hsould not reach here */
 exit0:
     return EFI_UNSUPPORTED;
 }
