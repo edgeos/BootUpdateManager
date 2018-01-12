@@ -30,8 +30,7 @@ TMP_KEYDIR="${EFI_TEST_DIR}/tmpkey"
 #Source file names
 list=${BIN_DIR}/edk2/*/X64/BootUpdateManager.efi
 bumimage=${list[0]}
-list=${BIN_DIR}/edk2/*/X64/TestPayload.efi
-payloadimage=${list[0]}
+payloadimage=test/payload.efi
 
 #Final Tarball
 TAR_FILE="${TEST_DIR}/testesp.tar.gz"
@@ -165,6 +164,9 @@ createAuthAppendUpdate()
 echo "****************************************"
 echo "  $0"
 echo "****************************************"
+
+# Initialize payload.efi (secure grub)
+./test/grub_make.sh
 
 # Chek for required binary files
 
