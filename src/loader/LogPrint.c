@@ -160,8 +160,8 @@ static EFI_STATUS LogPrint_file(IN CHAR8*           Buffer,
             logline = (logline + 1) & LOG_PRINT_LINENO_MAX_MASK;
             Status = LogPrint_file_setline(logline);
         }
-        *Printedp = Printed;
     }
+    *Printedp = Printed;
     return Status;
 }
 
