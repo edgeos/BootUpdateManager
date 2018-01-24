@@ -1,0 +1,99 @@
+SHELL=/bin/bash
+
+# These should be set through the top-level Makefile
+SRC_DIR ?= src
+ARCH ?= amd64
+
+UTIL_DIR = $(SRC_DIR)/utils
+COMMON_DIR = $(SRC_DIR)/common
+
+# Generated output directory structure
+output_directory = bin
+arch_dir=$(output_directory)/$(ARCH)
+
+#
+# suffix of the final utilities
+#    init
+#    print
+#    boottime-test
+#    runtime-init
+#    update-start
+#    update-complete
+#    currconfig-get
+#    noncurrconfig-get
+#
+util_names = init print update-start update-complete boottime-test \
+                runtime-init currconfig-get noncurrconfig-get
+
+# Build targets:
+#   prepend each target name with $(arch_dir)/bumstate-...
+#   for example: init on amd64 is replaced with bin/amd64/bumstate-init
+bin_targets = $(patsubst %,$(arch_dir)/bumstate-%,$(util_names))
+
+# The source files and header files to watch for changes
+common_source_files =   $(COMMON_DIR)/BUMState.c \
+                        $(UTIL_DIR)/LibCommon.c \
+                        $(UTIL_DIR)/EFIGlue.c
+
+common_header_files =   $(UTIL_DIR)/__BUMState.h \
+                        $(COMMON_DIR)/BUMState.h \
+                        $(UTIL_DIR)/LibCommon.h \
+                        $(UTIL_DIR)/EFIGlue.h
+
+common_depends = $(common_source_files) $(common_header_files) $(arch_dir)
+
+header_args = -iquote $(UTIL_DIR) -iquote $(COMMON_DIR)
+
+# Note that build.sh orchestrates the compile type, 
+# so use the variables here for libraries and global 
+# configuration needed regardless of compile type. 
+
+# Put any non linking GCC flags here
+cc_flags += -fshort-wchar
+# Put any libraries that need to be linked to here.
+ld_flags += 
+# Placeholder for post-build steps
+post_build+=
+
+CC ?= gcc
+
+all: $(bin_targets)
+
+$(arch_dir)/bumstate-init: $(UTIL_DIR)/init.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-print: $(UTIL_DIR)/print.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-boottime-test: $(UTIL_DIR)/boottime-test.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-runtime-init: $(UTIL_DIR)/runtime-init.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-update-start: $(UTIL_DIR)/update-start.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-update-complete: $(UTIL_DIR)/update-complete.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-currconfig-get: $(UTIL_DIR)/currconfig-get.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir)/bumstate-noncurrconfig-get: $(UTIL_DIR)/noncurrconfig-get.c $(common_depends)
+	$(CC) $(cc_flags) -o $@ $(header_args) $< $(common_source_files) $(ld_flags)
+	$(post_build)
+
+$(arch_dir):
+	-mkdir -p $(arch_dir)
+
+clean:
+	rm -f $(bin_targets)
+

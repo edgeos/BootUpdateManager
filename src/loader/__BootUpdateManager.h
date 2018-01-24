@@ -28,6 +28,7 @@
 #include "LibCommon.h"
 #include "LogPrint.h"
 #include "BootStat.h"
+#include "BUMState.h"
 
 #endif
 
