@@ -18,7 +18,7 @@
   PLATFORM_GUID                  = 038cd765-fcfb-4cbd-aa97-b7f6af5c8fb1
   PLATFORM_VERSION               = 1.01
   DSC_SPECIFICATION              = 0x00010005
-  OUTPUT_DIRECTORY               = BootUpdateManager/Build/
+  OUTPUT_DIRECTORY               = BootUpdateManager/bin/edk2/
   SUPPORTED_ARCHITECTURES        = IA32|IPF|X64|EBC|ARM|AARCH64
   BUILD_TARGETS                  = DEBUG|RELEASE|NOOPT
   SKUID_IDENTIFIER               = DEFAULT
@@ -74,7 +74,9 @@
 ###################################################################################################
 
 [Components]
-  BootUpdateManager/BootUpdateManager.inf
+  BootUpdateManager/src/BootUpdateManager.inf
+  BootUpdateManager/src/testpayload/TestPayload.inf
 
 [BuildOptions]
   #*_*_*_CC_FLAGS = -D DISABLE_NEW_DEPRECATED_INTERFACES
+
