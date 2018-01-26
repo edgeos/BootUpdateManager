@@ -19,6 +19,10 @@
 ### Customize  these variables
 ###
 
+SHELL = /bin/bash -x
+
+NAME := BUM
+
 # Where to push the docker image.
 REGISTRY ?= registry.gear.ge.com/predix_edge
 
@@ -57,7 +61,7 @@ PROXY_ARGS := -e http_proxy=$(http_proxy) -e https_proxy=$(https_proxy) -e no_pr
 BUILD_ARGS := --build-arg http_proxy=$(http_proxy) --build-arg https_proxy=$(https_proxy) --build-arg no_proxy=$(no_proxy)
 
 # directories which hold app source (not vendored)
-SRC_DIRS := bootloader utils
+SRC_DIRS := src
 
 TEST_DIRS := test # directories which hold test source
 
@@ -278,5 +282,5 @@ build-env-clean:
 	rm -rf .image-$(BUILD_IMAGE) .dockerfile-build-$(ARCH)
 
 bin-clean:
-	rm -rf "bin/$(ARCH)"
+	rm -rf "bin/$(ARCH)" "bin/edk2"
 
