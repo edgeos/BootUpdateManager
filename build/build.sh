@@ -1,7 +1,6 @@
 #!/bin/bash
 
 set -o errexit
-set -o nounset
 set -o pipefail
 
 if [ -z "${ARCH}" ]; then
@@ -15,15 +14,10 @@ if [ -z "${BUILD_TYPE}" ]; then
 fi
 
 function ExecutableTarget () {
-    set -x
     export cc_flags='-Wall -static '
     make -f build/Makefile.gcc
-    cd /home/edge
-    cd edk2
+    cd /home/edge/edk2
     export EDK_TOOLS_PATH=/home/edge/edk2/BaseTools
-    echo $SHELL
-    help
-    echo $WORKSPACE
     . ./edksetup.sh BaseTools
     build -a X64 -p BootUpdateManager/BootUpdateManager.dsc -b RELEASE -t GCC5 -n 64
 }
