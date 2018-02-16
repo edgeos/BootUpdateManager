@@ -16,6 +16,9 @@ fi
 function ExecutableTarget () {
     export cc_flags='-Wall -static '
     make -f build/Makefile.gcc
+}
+
+function Loader () {
     cd /home/edge/edk2
     export EDK_TOOLS_PATH=/home/edge/edk2/BaseTools
     . ./edksetup.sh BaseTools
@@ -49,6 +52,9 @@ function SharedLib() {
 case "$BUILD_TYPE" in
     executable) 
         ExecutableTarget
+    ;;
+    loader)
+        Loader
     ;;
 #    static-library) 
 #        StaticLib

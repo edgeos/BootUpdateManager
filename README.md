@@ -187,16 +187,16 @@ Accordingly, OS-update package should contain the following list of boot-related
     mbLinuz         Wrapped EdgeOS kernel
     bootmgfw.efi    Windows boot manager EFI binary
 
-## Building the Utilities
+## Building Steps
 
-Current (temporary) build instruction for user-level utilities:
+To do a docker build of the utilities, just run `make`.
 
+To do a direct build of the utilities, run the following commands:
         export BUILD_TYPE=executable
         export ARCH=amd64
         bash -c build/build.sh
 
-## Building the Boot Update Manager
-
+To do a docker build of the loader (boot-time EFI component), run `make BUILD_TYPE=loader`.
 
 ## State-File Format
 
