@@ -146,7 +146,6 @@ bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
 	@echo "building:    $@"
 	@echo "buildtype:   $BUILD_TYPE"
 	@echo $(DOCKER_USER)
-	@echo "    building utils"
 	@docker run                                 \
 		-t                                      \
 		--rm                                    \
@@ -163,8 +162,7 @@ bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
 		/bin/bash -c "                          \
 		./build/build.sh                        \
 		"
-	@echo "utils built"
-	@echo "    building loader"
+	@echo "built"
 
 # Interactive session in build container
 build-shell: bin/$(ARCH) .image-$(BUILD_IMAGE)
