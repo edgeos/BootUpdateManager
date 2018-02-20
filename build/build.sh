@@ -56,6 +56,10 @@ case "$BUILD_TYPE" in
     loader)
         Loader
     ;;
+    all)
+        ExecutableTarget
+        Loader
+    ;;
 #    static-library) 
 #        StaticLib
 #    ;;
