@@ -22,4 +22,24 @@ UINTN EFIAPI LogPrint(  IN CONST CHAR16  *Format,
 
 VOID EFIAPI LogPrint_init(VOID);
 
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define FILE_LINE_STRING " (" __FILE__ ", line " TOSTRING(__LINE__) "): "
+
+#define CANARYMAGIC (0x57ACBA54F00BAA12)
+#define DECLARECANARY()   UINT64 canary= CANARYMAGIC
+#define CHECKCANARY()   do{\
+                            if(CANARYMAGIC != canary){\
+                                Print(L"Dead canary 0x%016LX " FILE_LINE_STRING L"\n", \
+                                        canary);\
+                            }\
+                        }while(0)
+
+#define CHECKPOINT()    do{\
+                            static UINT64 checkpointcounter = 1;\
+                            Print(FILE_LINE_STRING L" %Ld\n", \
+                                  checkpointcounter++);\
+                        }while(0)
+
 #endif
