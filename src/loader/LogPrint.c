@@ -11,10 +11,10 @@
 
 #include "__LogPrint.h"
 
-#define LOG_PRINT_LINE_PREFIX_FORMAT L"%04d-%02d-%02d %02d:%02d:%02d %016llx %s) "
+#define LOG_PRINT_LINE_PREFIX_FORMAT L"%04d-%02d-%02d %02d:%02d:%02d %016LX %s) "
 /* The fixed length of the prefix line given the above format (minus the context). */
 #define LOG_PRINT_LINE_PREFIX_LENGTH ( (4 + 1 + 2 + 1 + 2) + 1 + (2+1+2+1+2) \
-                                        + 1 + 16 + 1 + 1 + 1 )
+                                        + 1 + 16 + 1 + 1 + 1)
 /* Maximum allowed length for the context */
 #define LOG_PRINT_LINE_CONTEXT_MAXLENGTH (80 - LOG_PRINT_LINE_PREFIX_LENGTH)
 
@@ -25,8 +25,8 @@
 /*  Functions and definitions related to logging to the file system           */
 /******************************************************************************/
 
-static UINT16 modes = LOG_PRINT_MODE_DEFAULT;
-static const CHAR16 *context = LOG_PRINT_CTXLBL_DEFAULT;
+static UINT16 modes = 0;
+static const CHAR16 *context = NULL;
 
 EFI_STATUS LogPrint_setContextLabel(const CHAR16 *setcontext)
 {
@@ -145,7 +145,10 @@ static EFI_STATUS LogPrint_file(IN CHAR8*           Buffer,
     Status = LogPrint_file_getline(&logline);
     if( !EFI_ERROR(Status) ){
         /* Form the log-file name */
-        UnicodeSPrint(filename, sizeof(filename), LOGFILE_FORMAT, logline);
+        UnicodeSPrint(  filename,
+                        sizeof(filename),
+                        LOGFILE_FORMAT,
+                        (int)logline);
         /* Write the buffer out to the log file. */
         Status = Common_CreateWriteCloseFile(   filename,
                                                 Buffer,
@@ -214,10 +217,14 @@ exit0:
 #define LOG_PRINT_LINE_PREFIX(Buffer, BufferSize, TimeStampp, TSC, Context) \
             AsciiSPrintUnicodeFormat(   Buffer, BufferSize, \
                                         LOG_PRINT_LINE_PREFIX_FORMAT, \
-                                        TimeStampp->Year,   TimeStampp->Month,\
-                                        TimeStampp->Day,\
-                                        TimeStampp->Hour,   TimeStampp->Minute,\
-                                        TimeStampp->Second, TSC, Context )
+                                        (int)(TimeStampp->Year), \
+                                        (int)(TimeStampp->Month), \
+                                        (int)(TimeStampp->Day), \
+                                        (int)(TimeStampp->Hour), \
+                                        (int)(TimeStampp->Minute), \
+                                        (int)(TimeStampp->Second), \
+                                        (UINT64)TSC, \
+                                        Context )
 
 static EFI_STATUS LogPrint_buffer(  IN  EFI_TIME        *TimeStampp,
                                     IN  UINT64          TSC,
@@ -356,14 +363,14 @@ UINTN EFIAPI LogPrint(  IN CONST CHAR16  *Format,
 exit0:
     /* Done with the Varriable-Argument list */
     VA_END (Marker);
-
     return Ret;
 }
 
 VOID EFIAPI LogPrint_init(VOID)
 {
-    /* Check the file-based logging mode */
-    if( modes & LOG_PRINT_MODE_FILE )
-        LogPrint_init_file();
+    /*  Initialize the "context" string to a default value (empty) */
+    context = LOG_PRINT_CTXLBL_DEFAULT;
+    modes = LOG_PRINT_MODE_DEFAULT;
+    LogPrint_init_file();
 }
 
