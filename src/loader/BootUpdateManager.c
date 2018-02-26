@@ -216,12 +216,6 @@ typedef enum {
     BUM_CURIMAGE_TYPE_COUNT
 } BUM_CURIMAGE_TYPE_t;
 
-static CHAR16* BUM_CURIMAGE_TYPE_TEXT[BUM_CURIMAGE_TYPE_COUNT+1]
-                = { L"Root BUM",
-                    L"Config BUM",
-                    L"Config Payload",
-                    L"Unknown" };
-
 static EFI_STATUS EFIAPI BUM_parseConfigVarValue(
                             IN  CHAR8 configvar[static BUM_CURCONFIG_VARSIZE],
                             OUT BUM_CURIMAGE_TYPE_t *imgtype_p,
@@ -903,15 +897,16 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
         LogPrint(L"BUM_main: BUM_getCurConfig failed with status (%d)",
                     AppStatus);
     }else{
-        LogPrint_setContextLabel(BUM_CURIMAGE_TYPE_TEXT[imgtype]);
         switch(imgtype){
             case BUM_CURIMAGE_ROOTBUM:
                 /*  This is the root BUM. */
+                LogPrint_setContextLabel(L"Root BUM");
                 AppStatus = BUM_root_main();
                 LogPrint(L"BUM_main: BUM_root_main failed with status (%d)",
                             AppStatus);
                 break;
             case BUM_CURIMAGE_CFGBUM:
+                LogPrint_setContextLabel(L"Config BUM");
                 LogPrint(L"    Configuration:    %a",
                             ConfigLocal);
                 /*  This is a configuration BUM. */
@@ -919,7 +914,14 @@ EFI_STATUS EFIAPI BUM_main( IN EFI_HANDLE       LoadedImageHandle,
                 LogPrint(L"BUM_main: BUM_config_main failed with status (%d)",
                             AppStatus);
                 break;
+            case BUM_CURIMAGE_CFGPLD:
+                LogPrint_setContextLabel(L"Config Payload");
+                /*  Something is wrong. */
+                LogPrint(L"BUM_main: BUM lauched as payload");
+                AppStatus = EFI_UNSUPPORTED;
+                break;
             default:
+                LogPrint_setContextLabel(L"Unknown");
                 /*  Something is wrong. */
                 LogPrint(L"BUM_main: Unknown loaded-image type");
                 AppStatus = EFI_UNSUPPORTED;
