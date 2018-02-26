@@ -67,7 +67,7 @@ TEST_DIRS := test # directories which hold test source
 
 ALL_ARCH := amd64 i386 arm aarch64
 
-BASEIMAGE?=registry.gear.ge.com/predix_edge/alpine-$(ARCH):3.5
+BASEIMAGE?=ubuntu:16.04
 
 IMAGE := $(REGISTRY)/$(NAME)-$(ARCH)
 

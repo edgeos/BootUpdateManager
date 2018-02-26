@@ -3,38 +3,18 @@ FROM ARG_FROM
 MAINTAINER Dev-Ops Team <Support.PredixEdge@ge.com>
 
 RUN set -ex \
-	&& apk add --no-cache --virtual .buildpack-deps \
-		 build-base \
-		 gdb \
-		 autoconf \
-		 automake \
-		 libtool \
-		 openssl-dev \
-		 zlib-dev \
-		 curl \
-		 tar \
-		 ca-certificates \
-		 git \
-		 mercurial \
-		 gnupg \
-		 cmake \
-		 pcre-dev \
-		 util-linux-dev \
-		 acpica \
-                 iasl \
-                 gcc \
-		 nasm \
-                 bash \
-                 bash-completion \
-                 pciutils \
-                 usbutils \
-                 coreutils \
-                 binutils \
-                 findutils \
-                 grep \
-			&& rm -rf /var/cache/apk/* \
-                        && mv /bin/sh /bin/ksh \
-                        && ln -s /bin/bash /bin/sh
+        && ls /etc/apt/ \
+        && apt-get update && apt-get install -y \
+                build-essential \
+                uuid-dev \
+                acpica-tools \
+                iasl \
+                git \
+                gcc-5 \
+                python \
+                nasm \
+                    && mv /bin/sh /bin/ksh \
+                    && ln -s /bin/bash /bin/sh
 
 # Download and sest up cpplint
 RUN git clone https://github.com/tianocore/edk2 /home/edge/edk2 \
