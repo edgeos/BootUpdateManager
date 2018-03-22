@@ -19,6 +19,10 @@
 ### Customize  these variables
 ###
 
+SHELL = /bin/bash -x
+
+NAME := BUM
+
 # Where to push the docker image.
 REGISTRY ?= registry.gear.ge.com/predix_edge
 
@@ -39,8 +43,8 @@ BUILD_IMAGE ?= bum-builder-c-$(ARCH)
 COVERITY_STREAM := c-template
 
 # Type of gcc compilation. Interpritted by build/build.sh. Affects `build` and `image` rules.
-# Select from executable, static-library, shared-library, dynamic-library
-BUILD_TYPE=executable
+# Select from executable, loader, all
+BUILD_TYPE=all
 
 ###
 ### These variables should not need tweaking.
@@ -57,13 +61,13 @@ PROXY_ARGS := -e http_proxy=$(http_proxy) -e https_proxy=$(https_proxy) -e no_pr
 BUILD_ARGS := --build-arg http_proxy=$(http_proxy) --build-arg https_proxy=$(https_proxy) --build-arg no_proxy=$(no_proxy)
 
 # directories which hold app source (not vendored)
-SRC_DIRS := bootloader utils
+SRC_DIRS := src
 
 TEST_DIRS := test # directories which hold test source
 
 ALL_ARCH := amd64 i386 arm aarch64
 
-BASEIMAGE?=registry.gear.ge.com/predix_edge/alpine-$(ARCH):3.5
+BASEIMAGE?=ubuntu:16.04
 
 IMAGE := $(REGISTRY)/$(NAME)-$(ARCH)
 
@@ -139,7 +143,8 @@ build: bin/$(ARCH)/$(NAME)
 
 # Builds source and outputs to bin directory via volume mount
 bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
-	@echo "building: $@"
+	@echo "building:    $@"
+	@echo "buildtype:   $BUILD_TYPE"
 	@echo $(DOCKER_USER)
 	@docker run                                 \
 		-t                                      \
@@ -157,6 +162,7 @@ bin/$(ARCH)/$(NAME): bin/$(ARCH) .image-$(BUILD_IMAGE) $(PROJECT_SOURCE)
 		/bin/bash -c "                          \
 		./build/build.sh                        \
 		"
+	@echo "built"
 
 # Interactive session in build container
 build-shell: bin/$(ARCH) .image-$(BUILD_IMAGE)
@@ -278,5 +284,5 @@ build-env-clean:
 	rm -rf .image-$(BUILD_IMAGE) .dockerfile-build-$(ARCH)
 
 bin-clean:
-	rm -rf "bin/$(ARCH)"
+	rm -rf "bin/$(ARCH)" "bin/edk2"
 

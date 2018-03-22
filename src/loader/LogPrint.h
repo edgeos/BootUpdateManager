@@ -12,24 +12,34 @@
 #define LOG_PRINT_MODE_VALID    (0x3)
 #define LOG_PRINT_MODE_CONSOLE  (0x2)
 #define LOG_PRINT_MODE_FILE     (0x1)
-typedef UINT8   LogPrint_mode_t;
 
-typedef struct LogPrint_state_s {
-    LogPrint_mode_t     modes;
-    EFI_FILE_PROTOCOL   *logdir;
-    UINT16              logline;
-} LogPrint_state_t;
+EFI_STATUS LogPrint_setModes(UINT16 setmodes);
 
-#define ZERO_LOG_PRINT_STATE() {0, NULL, 0}
+EFI_STATUS LogPrint_setContextLabel(const CHAR16 *setcontext);
 
-UINTN EFIAPI LogPrint(  IN LogPrint_state_t *state_p,
-                        IN CONST CHAR16  *Format,
+UINTN EFIAPI LogPrint(  IN CONST CHAR16  *Format,
                         ... );
 
-EFI_STATUS EFIAPI LogPrint_init(IN OUT LogPrint_state_t *statep,
-                                IN LogPrint_mode_t      modes,
-                                IN EFI_FILE_PROTOCOL    *logdir );
+VOID EFIAPI LogPrint_init(VOID);
 
-EFI_STATUS EFIAPI LogPrint_close(   IN OUT LogPrint_state_t *statep );
+
+#define STRINGIFY(x) #x
+#define TOSTRING(x) STRINGIFY(x)
+#define FILE_LINE_STRING " (" __FILE__ ", line " TOSTRING(__LINE__) "): "
+
+#define CANARYMAGIC (0x57ACBA54F00BAA12)
+#define DECLARECANARY()   UINT64 canary= CANARYMAGIC
+#define CHECKCANARY()   do{\
+                            if(CANARYMAGIC != canary){\
+                                Print(L"Dead canary 0x%016LX " FILE_LINE_STRING L"\n", \
+                                        canary);\
+                            }\
+                        }while(0)
+
+#define CHECKPOINT()    do{\
+                            static UINT64 checkpointcounter = 1;\
+                            Print(FILE_LINE_STRING L" %Ld\n", \
+                                  checkpointcounter++);\
+                        }while(0)
 
 #endif

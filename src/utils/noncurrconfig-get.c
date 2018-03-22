@@ -8,12 +8,11 @@
 #include "EFIGlue.h"
 #include "BUMState.h"
 
-static const char *usage = "<BUM status directory>";
+static const char *usage = "<BUM state directory>";
 
 int main(int argc, char** argv)
 {
     int ret;
-    EFI_FILE_PROTOCOL *statusdir;
     BUM_state_t *BUM_state_p;
     char Config[BUMSTATE_CONFIG_MAXLEN];
     EFI_STATUS stat;
@@ -22,8 +21,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "Usage: %s %s\n", argv[0], usage);
         ret = -1;
     }else{
-        statusdir = GetDirFileProtocol(argv[1]);
-        stat = BUMState_Get(statusdir, &BUM_state_p);
+        stat = BUMState_Get(argv[1], &BUM_state_p);
         if(EFI_ERROR(stat)){
             fprintf(stderr, "   BUMState_Get failed\n");
             ret = -1;

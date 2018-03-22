@@ -33,69 +33,76 @@ static void c16strtostr(char            *strdst,
     strdst[i] = '\0';
 }
 
-static char* formfilepath(  char    *dirpath,
-                            CHAR16  *filename)
+static void strtoc16str(CHAR16      *c16strdst,
+                        const char  *strsrc)
 {
-    size_t dirlen, fnamelen, pathlen;
-    char *fullpath;
-    /*  compute lengths */
-    fnamelen = c16strlen(filename);
-    dirlen = strlen(dirpath);
-    pathlen = dirlen + 1 + fnamelen;
-    /*  allocate memory to store full path */
-    fullpath = malloc(sizeof(char)*(pathlen+1));
-    if(NULL != fullpath){
-        /*  copy the stem */
-        strcpy(fullpath, dirpath);
-        /*  add the / */
-        fullpath[dirlen] = '/';
-        /*  copy the leaf */
-        c16strtostr(&(fullpath[dirlen+1]), filename);
-    }
-    return fullpath;
+    size_t i;
+    for(i=0; strsrc[i] != '\0'; i++)
+        c16strdst[i] = (CHAR16)strsrc[i];
+    c16strdst[i] = 0;
 }
 
-EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL    *dir_p,
-                                                IN CHAR16               *filename,
-                                                IN VOID*                buffer,
-                                                IN UINTN                buffersize )
+#define PATHLEN_MAX (512)
+
+EFI_STATUS EFIAPI Common_FreePath(  IN  CHAR16 *Path)
+{
+    free(Path);
+    return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI Common_GetPathFromParts(  IN  CHAR8   *DirPath,
+                                            IN  CHAR8   *FileName,
+                                            OUT CHAR16  **Path_p)
 {
     EFI_STATUS ret;
-    char *fullpath;
+    UINTN DirPath_len, FileName_len, Path_len;
+    CHAR16 *Path;
+    /*  Get lengths of the two strings to be generated */
+    DirPath_len = strlen(DirPath);
+    FileName_len = strlen(FileName);
+    Path_len = DirPath_len + 1 + FileName_len;
+    if(PATHLEN_MAX < Path_len)
+        ret = EFI_UNSUPPORTED;
+    else{
+        /*  Allocate space for Path */
+        Path = (CHAR16*)malloc((Path_len+1)*sizeof(CHAR16));
+        if(NULL == Path)
+            ret = EFI_OUT_OF_RESOURCES;
+        else{
+            /*  Generate the path */
+            strtoc16str(Path, DirPath);
+            Path[DirPath_len] = L'/';
+            strtoc16str(&(Path[DirPath_len+1]), FileName);
+            *Path_p = Path;
+            ret = EFI_SUCCESS;
+        }
+    }
+    return ret;
+}
+
+EFI_STATUS EFIAPI Common_OpenFile(  OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                    IN  CHAR16              *FileName,
+                                    IN  char                *OpenMode)
+{
+    EFI_STATUS ret;
+    size_t pathlen;
+    char *filepath8;
     FILE *filep;
-    size_t written;
-    int flushstat;
-    /*  Form the file path */
-    fullpath = formfilepath((char*)dir_p, filename);
-    if(NULL == fullpath){
-        ret = EFI_GENERIC_ERROR;
-        goto exit0;
+    pathlen = c16strlen(FileName);
+    filepath8 = (char*)malloc(sizeof(char)*(pathlen+1));
+    if(NULL == filepath8)
+        ret = EFI_OUT_OF_RESOURCES;
+    else{
+        c16strtostr(filepath8, FileName);
+        filep = fopen(filepath8, OpenMode);
+        if(NULL == filep)
+            ret = EFI_OUT_OF_RESOURCES;
+        else{
+            *NewHandle = (EFI_FILE_PROTOCOL*)filep;
+            ret = EFI_SUCCESS;
+        }
+        free(filepath8);
     }
-    /*  Create/Open the file */
-    filep = fopen(fullpath, "w");
-    if(NULL == filep){
-        ret = EFI_GENERIC_ERROR;
-        goto exit1;
-    }
-    /*  Write the file */
-    written = fwrite(buffer, (size_t)1, buffersize, filep);
-    if(written != buffersize){
-        ret = EFI_GENERIC_ERROR;
-        goto exit2;
-    }
-    /*  Flush the file */
-    flushstat = fflush(filep);
-    if(0 != flushstat)
-        ret = EFI_GENERIC_ERROR;
-    else
-        ret = EFI_SUCCESS;
-    /*  Close the file */
-exit2:
-    fclose(filep);
-    /*  Free the file path */
-exit1:
-    free(fullpath);
-exit0:
     return ret;
 }
 
@@ -115,16 +122,16 @@ static long fsize( FILE* filep )
     return size;
 }
 
-static EFI_STATUS Common_ReadFile(  FILE*       filep,
-                                    VOID*       *buffer_p,
-                                    UINTN       *buffersize_p)
+EFI_STATUS Common_ReadFile( IN EFI_FILE_PROTOCOL    *filep,
+                            VOID*                   *buffer_p,
+                            UINTN                   *buffersize_p)
 {
     EFI_STATUS ret;
     long filesize;
     VOID *buffer;
-    size_t read;
+    size_t readsize;
     /*  Get file size. */
-    filesize = fsize(filep);
+    filesize = fsize((FILE*)filep);
     if(filesize <= 0)
         ret = EFI_GENERIC_ERROR;
     else{
@@ -134,8 +141,8 @@ static EFI_STATUS Common_ReadFile(  FILE*       filep,
             ret = EFI_GENERIC_ERROR;
         else{
             /*  Read the file */
-            read = fread(buffer, 1, filesize, filep);
-            if(read < filesize){
+            readsize = fread(buffer, 1, filesize, (FILE*)filep);
+            if(readsize < filesize){
                 /*  Free the buffer in case of failure */
                 free(buffer);
                 ret = EFI_GENERIC_ERROR;
@@ -150,43 +157,113 @@ static EFI_STATUS Common_ReadFile(  FILE*       filep,
     return ret;
 }
 
-EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN EFI_FILE_PROTOCOL    *dir_p,
-                                            IN CHAR16               *filename,
-                                            IN VOID*                *buffer_p,
-                                            IN UINTN                *buffersize_p )
-{
-    EFI_STATUS ret;
-    char *fullpath;
-    FILE *filep;
-    /*  Form the file path */
-    fullpath = formfilepath((char*)dir_p, filename);
-    if(NULL == fullpath){
-        ret = EFI_GENERIC_ERROR;
-        goto exit0;
-    }
-    /*  Open the file for reading */
-    filep = fopen(fullpath, "r");
-    if(NULL == filep){
-        ret = EFI_GENERIC_ERROR;
-        goto exit1;
-    }
-    /*  Read the file */
-    ret = Common_ReadFile( filep,
-                           buffer_p,
-                           buffersize_p);
-    /*  Close the file */
-    fclose(filep);
-    /*  Free the file path */
-exit1:
-    free(fullpath);
-exit0:
-    return ret;
-}
-
 EFI_STATUS EFIAPI Common_FreeReadBuffer(IN VOID*    buffer_p,
                                         IN UINTN    buffersize)
 {
     free(buffer_p);
     return EFI_SUCCESS;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN  CHAR16      *filepath,
+                                            OUT VOID*       *buffer_p,
+                                            OUT UINTN       *buffersize_p)
+{
+    EFI_STATUS Status;
+    EFI_FILE_PROTOCOL *filep;
+
+    /* Open file */
+    Status = Common_OpenFile(   &filep,
+                                filepath,
+                                "r");
+    if(!EFI_ERROR(Status)){
+        /* Read the file */
+        Status = Common_ReadFile(   filep,
+                                    buffer_p,
+                                    buffersize_p);
+        /* close file */
+        fclose((FILE*)filep);
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN CHAR16 *filepath,
+                                                IN VOID*  buffer,
+                                                IN UINTN  buffersize)
+{
+    EFI_STATUS Status;
+    EFI_FILE_PROTOCOL *filep;
+    size_t writesize;
+
+    /* Open file */
+    Status = Common_OpenFile(   &filep,
+                                filepath,
+                                "w+");
+    if( !EFI_ERROR(Status) ){
+        /* Write out to file */
+        writesize = fwrite(buffer, 1, buffersize, (FILE*)filep);
+        if(writesize < buffersize)
+            Status = EFI_DEVICE_ERROR;
+        else
+            Status = EFI_SUCCESS;
+        /* close file */
+        fclose((FILE*)filep);
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_CreateWriteCloseDirFile(   IN CHAR8  *dirpath,
+                                                    IN CHAR8  *filename,
+                                                    IN VOID*  buffer,
+                                                    IN UINTN  buffersize)
+{
+    EFI_STATUS Status, CloseStatus;
+    CHAR16 *filepath;
+    /* Form file path */
+    Status = Common_GetPathFromParts(   dirpath,
+                                        filename,
+                                        &filepath);
+    if(!EFI_ERROR(Status)){
+        /* Create, write, and close the file */
+        Status = Common_CreateWriteCloseFile(   filepath,
+                                                buffer,
+                                                buffersize);
+        /* Free the file path */
+        CloseStatus = Common_FreePath(filepath);
+        if( EFI_ERROR(CloseStatus) )
+            if( ! EFI_ERROR(Status) )
+                Status = CloseStatus;
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseDirFile(  IN CHAR8    *dirpath,
+                                                IN CHAR8    *filename,
+                                                OUT VOID*   *buffer_p,
+                                                OUT UINTN   *buffersize_p)
+{
+    EFI_STATUS Status, CloseStatus;
+    CHAR16 *filepath;
+    /* Form file path */
+    Status = Common_GetPathFromParts(   dirpath,
+                                        filename,
+                                        &filepath);
+    if(!EFI_ERROR(Status)){
+        /* Open, read, and close the file */
+        Status = Common_OpenReadCloseFile(  filepath,
+                                            buffer_p,
+                                            buffersize_p);
+        /* Free the file path */
+        CloseStatus = Common_FreePath(filepath);
+        if( EFI_ERROR(CloseStatus) ){
+            if( ! EFI_ERROR(Status) ){
+                Common_FreeReadBuffer(  *buffer_p,
+                                        *buffersize_p);
+                *buffer_p = NULL;
+                *buffersize_p = 0;
+                Status = CloseStatus;
+            }
+        }
+    }
+    return Status;
 }
 

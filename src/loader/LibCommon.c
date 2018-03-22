@@ -49,6 +49,114 @@ exit0:
     return Status;
 }
 
+static EFI_FILE_PROTOCOL *sgBootPart_RootDir = NULL;
+
+EFI_STATUS EFIAPI Common_FileOpsInit(   EFI_HANDLE  BootPartHandle)
+{
+    EFI_STATUS Status;
+
+    EFI_SIMPLE_FILE_SYSTEM_PROTOCOL *SimpleFileSystem;
+
+    /*  Find the EFI_SIMPLE_FILE_SYSTEM_PROTOCOL interface for the boot
+        partition. */
+    Status = gBS->HandleProtocol(   BootPartHandle,
+                                    &gEfiSimpleFileSystemProtocolGuid,
+                                    (VOID**)&SimpleFileSystem);
+    if(!EFI_ERROR(Status)){
+        /*  Open the boot partition. */
+        Status = SimpleFileSystem->OpenVolume(  SimpleFileSystem,
+                                                &sgBootPart_RootDir);
+        if (EFI_ERROR(Status))
+            /*  On failing to open the root directory, set protocol to NULL */
+            sgBootPart_RootDir = NULL;
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_FileOpsClose( VOID )
+{
+    EFI_STATUS Status;
+    /* Close the EFI_FILE_PROTOCOL interface for the root directory. */
+    /* Close never fails. */
+    Status = sgBootPart_RootDir->Close( sgBootPart_RootDir );
+    sgBootPart_RootDir = NULL;
+    return Status;
+}
+
+#define PATHLEN_MAX (512)
+
+EFI_STATUS EFIAPI Common_FreePath(  IN  CHAR16 *Path)
+{
+    return gBS->FreePool(Path);
+}
+
+EFI_STATUS EFIAPI Common_GetPathFromParts(  IN  CHAR8   *DirPath,
+                                            IN  CHAR8   *FileName,
+                                            OUT CHAR16  **Path_p)
+{
+    EFI_STATUS ret;
+    UINTN DirPath_len, FileName_len, Path_len;
+    CHAR16 *Path;
+    /*  Get lengths of the two strings to be generated */
+    DirPath_len = AsciiStrnLenS(DirPath, PATHLEN_MAX);
+    FileName_len = AsciiStrnLenS(FileName, PATHLEN_MAX);
+    Path_len = DirPath_len + 1 + FileName_len;
+    if(PATHLEN_MAX < Path_len)
+        ret = EFI_UNSUPPORTED;
+    else{
+        /*  Allocate space for Path */
+        ret = gBS->AllocatePool(EfiLoaderData,
+                                (Path_len+1)*sizeof(CHAR16),
+                                (VOID**)&Path);
+        if(!EFI_ERROR(ret)){
+            /*  Generate the path */
+            ret = AsciiStrToUnicodeStrS(DirPath,
+                                        Path,
+                                        DirPath_len+1);
+            if(!EFI_ERROR(ret)){
+                Path[DirPath_len] = L'\\';
+                ret = AsciiStrToUnicodeStrS(FileName,
+                                            &(Path[DirPath_len+1]),
+                                            FileName_len+1);
+            }
+            /*  Free the buffer or assign it to the output variable */
+            if(EFI_ERROR(ret))
+                Common_FreePath(Path);
+            else
+                *Path_p = Path;
+        }
+    }
+    return ret;
+}
+
+EFI_STATUS EFIAPI Common_CreateOpenFile(OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                        IN  CHAR16              *FileName,
+                                        IN  UINT64              OpenMode,
+                                        IN  UINT64              Attributes)
+{
+    if(NULL != sgBootPart_RootDir)
+        return sgBootPart_RootDir->Open(sgBootPart_RootDir,
+                                        NewHandle,
+                                        FileName,
+                                        (OpenMode | EFI_FILE_MODE_CREATE),
+                                        Attributes);
+    else
+        return EFI_NOT_READY;
+}
+
+EFI_STATUS EFIAPI Common_OpenFile(  OUT EFI_FILE_PROTOCOL   **NewHandle,
+                                    IN  CHAR16              *FileName,
+                                    IN  UINT64              OpenMode)
+{
+   if(NULL != sgBootPart_RootDir)
+        return sgBootPart_RootDir->Open(sgBootPart_RootDir,
+                                        NewHandle,
+                                        FileName,
+                                        OpenMode,
+                                        0);
+    else
+        return EFI_NOT_READY;
+}
 
 EFI_STATUS EFIAPI Common_GetFileInfo(   IN  EFI_FILE_PROTOCOL   *filep,
                                         OUT EFI_FILE_INFO       **fileinfo_pp,
@@ -151,6 +259,12 @@ exit0:
     return Status;
 }
 
+EFI_STATUS EFIAPI Common_FreeReadBuffer(IN VOID*    buffer_p,
+                                        IN UINTN    buffersize)
+{
+    return gBS->FreePool(buffer_p);
+}
+
 EFI_STATUS EFIAPI Common_WriteFile( IN EFI_FILE_PROTOCOL *filep,
                                     IN VOID*  buffer,
                                     IN UINTN  buffersize)
@@ -206,8 +320,7 @@ exit0:
     return Status;
 }
 
-EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL *dir_p,
-                                                IN CHAR16 *filename,
+EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN CHAR16 *filepath,
                                                 IN VOID*  buffer,
                                                 IN UINTN  buffersize)
 {
@@ -215,9 +328,10 @@ EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL *dir_p,
     EFI_FILE_PROTOCOL *filep;
 
     /* Open file */
-    Status = dir_p->Open( dir_p, &filep, filename,
-                            ( EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE
-                                | EFI_FILE_MODE_CREATE ), 0 );
+    Status = Common_CreateOpenFile( &filep,
+                                    filepath,
+                                    (EFI_FILE_MODE_READ | EFI_FILE_MODE_WRITE),
+                                    0);
     if( EFI_ERROR(Status) ){
         goto exit0;
     }
@@ -231,6 +345,91 @@ EFI_STATUS EFIAPI Common_CreateWriteCloseFile(  IN EFI_FILE_PROTOCOL *dir_p,
         if( ! EFI_ERROR(Status) )
             Status = CloseStatus;
 exit0:
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseFile( IN  CHAR16      *filepath,
+                                            OUT VOID*       *buffer_p,
+                                            OUT UINTN       *buffersize_p)
+{
+    EFI_STATUS Status, CloseStatus;
+    EFI_FILE_PROTOCOL *filep;
+
+    /* Open file */
+    Status = Common_OpenFile(   &filep,
+                                filepath,
+                                EFI_FILE_MODE_READ);
+    if( EFI_ERROR(Status) ){
+        goto exit0;
+    }
+
+    /* Read the file */
+    Status = Common_ReadFile(   filep,
+                                buffer_p,
+                                buffersize_p);
+
+    /* close file */
+    CloseStatus = filep->Close( filep );
+    if( EFI_ERROR(CloseStatus) )
+        if( ! EFI_ERROR(Status) )
+            Status = CloseStatus;
+exit0:
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_CreateWriteCloseDirFile(   IN CHAR8  *dirpath,
+                                                    IN CHAR8  *filename,
+                                                    IN VOID*  buffer,
+                                                    IN UINTN  buffersize)
+{
+    EFI_STATUS Status, CloseStatus;
+    CHAR16 *filepath;
+    /* Form file path */
+    Status = Common_GetPathFromParts(   dirpath,
+                                        filename,
+                                        &filepath);
+    if(!EFI_ERROR(Status)){
+        /* Create, write, and close the file */
+        Status = Common_CreateWriteCloseFile(   filepath,
+                                                buffer,
+                                                buffersize);
+        /* Free the file path */
+        CloseStatus = Common_FreePath(filepath);
+        if( EFI_ERROR(CloseStatus) )
+            if( ! EFI_ERROR(Status) )
+                Status = CloseStatus;
+    }
+    return Status;
+}
+
+EFI_STATUS EFIAPI Common_OpenReadCloseDirFile(  IN CHAR8    *dirpath,
+                                                IN CHAR8    *filename,
+                                                OUT VOID*   *buffer_p,
+                                                OUT UINTN   *buffersize_p)
+{
+    EFI_STATUS Status, CloseStatus;
+    CHAR16 *filepath;
+    /* Form file path */
+    Status = Common_GetPathFromParts(   dirpath,
+                                        filename,
+                                        &filepath);
+    if(!EFI_ERROR(Status)){
+        /* Open, read, and close the file */
+        Common_OpenReadCloseFile(   filepath,
+                                    buffer_p,
+                                    buffersize_p);
+        /* Free the file path */
+        CloseStatus = Common_FreePath(filepath);
+        if( EFI_ERROR(CloseStatus) ){
+            if( ! EFI_ERROR(Status) ){
+                Common_FreeReadBuffer(  *buffer_p,
+                                        *buffersize_p);
+                *buffer_p = NULL;
+                *buffersize_p = 0;
+                Status = CloseStatus;
+            }
+        }
+    }
     return Status;
 }
 

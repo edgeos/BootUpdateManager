@@ -3,33 +3,33 @@ FROM ARG_FROM
 MAINTAINER Dev-Ops Team <Support.PredixEdge@ge.com>
 
 RUN set -ex \
-	&& apk add --no-cache --virtual .buildpack-deps \
-		 build-base \
-		 gdb \
-		 autoconf \
-		 automake \
-		 libtool \
-		 openssl-dev \
-		 zlib-dev \
-		 curl \
-		 tar \
-		 ca-certificates \
-		 git \
-		 mercurial \
-		 gnupg \
-		 cmake \
-		 pcre-dev \
-			&& rm -rf /var/cache/apk/*
+        && ls /etc/apt/ \
+        && apt-get update && apt-get install -y \
+                build-essential \
+                uuid-dev \
+                acpica-tools \
+                iasl \
+                git \
+                gcc-5 \
+                python \
+                nasm \
+                    && mv /bin/sh /bin/ksh \
+                    && ln -s /bin/bash /bin/sh
 
 # Download and sest up cpplint
-RUN git clone https://github.com/google/styleguide.git /edge-test/styleguide
+RUN git clone https://github.com/tianocore/edk2 /home/edge/edk2 \
+        && make -C /home/edge/edk2/BaseTools \
+        && chmod -R a+rwX /home/edge/edk2 \
+        && ln -s /home/edge/BUM /home/edge/edk2/BootUpdateManager
 
 # googletest
-ARG GOOGLETEST_VERSION
-ENV GOOGLETEST_VERSION ${GOOGLETEST_VERSION:-1.8.0}
+# ARG GOOGLETEST_VERSION
+# ENV GOOGLETEST_VERSION ${GOOGLETEST_VERSION:-1.8.0}
 
-ENV GOOGLETEST_SHA1 e7e646a6204638fe8e87e165292b8dd9cd4c36ed
+# ENV GOOGLETEST_SHA1 e7e646a6204638fe8e87e165292b8dd9cd4c36ed
 
-ENV GOOGLETEST_URL https://github.com/google/googletest/archive/release-${GOOGLETEST_VERSION}.tar.gz
-RUN curl -fsSL ${GOOGLETEST_URL} -o /edge-test/googletest-release-${GOOGLETEST_VERSION}.tar.gz && \
-	echo "${GOOGLETEST_SHA1}  /edge-test/googletest-release-${GOOGLETEST_VERSION}.tar.gz" | sha1sum -c -
+# ENV GOOGLETEST_URL https://github.com/google/googletest/archive/release-${GOOGLETEST_VERSION}.tar.gz
+# RUN curl -fsSL ${GOOGLETEST_URL} -o /edge-test/googletest-release-${GOOGLETEST_VERSION}.tar.gz && \
+#	echo "${GOOGLETEST_SHA1}  /edge-test/googletest-release-${GOOGLETEST_VERSION}.tar.gz" | sha1sum -c -
+
+# ENTRYPOINT ["/bin/bash"]

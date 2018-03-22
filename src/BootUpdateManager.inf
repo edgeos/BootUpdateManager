@@ -21,9 +21,9 @@
 [Sources]
   loader/BootUpdateManager.c
   loader/__BootUpdateManager.h
-#  common/BUMState.c
+  common/BUMState.c
   common/BUMState.h
-#  loader/__BUMState.h
+  loader/__BUMState.h
   loader/BootStat.c
   loader/BootStat.h
   loader/__BootStat.h

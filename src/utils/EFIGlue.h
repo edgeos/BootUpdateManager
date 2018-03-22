@@ -22,11 +22,6 @@ typedef UINTN               EFI_STATUS;
 typedef VOID                EFI_FILE_PROTOCOL;
 typedef bool                BOOLEAN;
 
-static inline EFI_FILE_PROTOCOL *GetDirFileProtocol(char* dir_p)
-{
-    return (EFI_FILE_PROTOCOL *)dir_p;
-}
-
 #define EFIAPI
 #define IN
 #define OUT
@@ -36,7 +31,10 @@ static inline EFI_FILE_PROTOCOL *GetDirFileProtocol(char* dir_p)
 #define EFI_GENERIC_ERROR       (0xFFFFFFFFFFFFFFFF)
 #define EFI_LOAD_ERROR          EFI_GENERIC_ERROR
 #define EFI_INVALID_PARAMETER   EFI_GENERIC_ERROR
+#define EFI_UNSUPPORTED         EFI_GENERIC_ERROR
 #define EFI_NOT_READY           EFI_GENERIC_ERROR
+#define EFI_DEVICE_ERROR        EFI_GENERIC_ERROR
+#define EFI_OUT_OF_RESOURCES    EFI_GENERIC_ERROR
 #define EFI_NOT_FOUND           EFI_GENERIC_ERROR
 #define EFI_ERROR(stat)         (EFI_SUCCESS != stat)
 

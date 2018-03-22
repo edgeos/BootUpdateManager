@@ -8,18 +8,15 @@
 #include "EFIGlue.h"
 #include "BUMState.h"
 
-static int bootTimeTest(char *statusdir_name)
+static int bootTimeTest(char *statedir_name)
 {
     int ret;
-    EFI_FILE_PROTOCOL *statusdir;
     BUM_state_t       *BUM_state_p;
     EFI_STATUS stat;
     /*  Assume success */
     ret = 0;
-    /*  Acquire the status directory */
-    statusdir = GetDirFileProtocol(statusdir_name);
     /*  Acquire the BUM state */
-    stat = BUMState_Get(statusdir, &BUM_state_p);
+    stat = BUMState_Get(statedir_name, &BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Get failed\n");
         ret = -1;
@@ -28,7 +25,7 @@ static int bootTimeTest(char *statusdir_name)
     /*  Perform the boot-time logic. */
     BUMStateNext_BootTime(BUM_state_p);
     /*  Save the BUM state */
-    stat = BUMState_Put(statusdir, BUM_state_p);
+    stat = BUMState_Put(statedir_name, BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Put failed\n");
         ret = -1;
@@ -46,7 +43,7 @@ exit0:
     return ret;
 }
 
-static const char *usage = "<BUM status directory>";
+static const char *usage = "<BUM state directory>";
 
 int main(int argc, char** argv)
 {
