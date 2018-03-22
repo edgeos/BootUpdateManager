@@ -15,6 +15,12 @@
 
 #Source directory
 BIN_DIR="bin"
+UTIL_DIR="${BIN_DIR}/amd64"
+
+#BUM-state utilities
+BUMSTATE_INIT="${UTIL_DIR}/bumstate-init"
+BUMSTATE_UPDSTART="${UTIL_DIR}/bumstate-update-start"
+BUMSTATE_UPDCMPLT="${UTIL_DIR}/bumstate-update-complete"
 
 #Main test directories
 TEST_DIR="test"
@@ -22,28 +28,31 @@ EFI_TEST_DIR="${TEST_DIR}/efi"
 TMP_KEYDIR="${EFI_TEST_DIR}/tmpkey"
 
 #Source file names
-shellimage=${TEST_DIR}/assets/Shell.efi
 list=${BIN_DIR}/edk2/*/X64/BootUpdateManager.efi
 bumimage=${list[0]}
-list=${BIN_DIR}/edk2/*/X64/TestPayload.efi
-payloadimage=${list[0]}
+payloadimage=test/payload.efi
 
 #Final Tarball
 TAR_FILE="${TEST_DIR}/testesp.tar.gz"
 
+#Configuratoin names
+TEST_PRIM_CFG="sda3"
+TEST_BKUP_CFG="sda2"
+
 #ESP directories
 EFI_TEST_ESPDIR="${EFI_TEST_DIR}/esp"
 TEST_BOOT_DIR="${EFI_TEST_ESPDIR}/efi/boot"
-TEST_ROOT_DIR="${EFI_TEST_ESPDIR}/root"
-TEST_PRIM_DIR="${EFI_TEST_ESPDIR}/primary"
-TEST_BKUP_DIR="${EFI_TEST_ESPDIR}/backup"
+TEST_LOG_DIR="${EFI_TEST_ESPDIR}/bootlog"
+TEST_BUMSTATE_DIR="${EFI_TEST_ESPDIR}/bumstate"
+TEST_PRIM_DIR="${EFI_TEST_ESPDIR}/${TEST_PRIM_CFG}"
+TEST_BKUP_DIR="${EFI_TEST_ESPDIR}/${TEST_BKUP_CFG}"
 
+INITKEYDIR_NAME="${EFI_TEST_ESPDIR}/initkeys"
 KEYDIR_NAME="keys"
-LOGDIR_NAME="log"
 
 #ESP file names
 EFIBIN_NAME="bootx64.efi"
-PAYLD_NAME="grubx64.efi"
+PAYLD_NAME="payload.efi"
 
 PKUPDATE_NAME="PK.update.auth"
 KEKUPDATE_NAME="KEK.update.auth"
@@ -52,7 +61,6 @@ DBAPPEND_NAME="db.append.auth"
 
 #Key file names
 guidfile=${TMP_KEYDIR}/guid
-
 
 #===============================================================================
 #
@@ -157,6 +165,9 @@ echo "****************************************"
 echo "  $0"
 echo "****************************************"
 
+# Initialize payload.efi (secure grub)
+./test/grub_make.sh
+
 # Chek for required binary files
 
 #Test for the test directory and write permissions
@@ -196,16 +207,15 @@ mkdir -p ${EFI_TEST_ESPDIR}
 
 mkdir -p ${TEST_BOOT_DIR}
 
-mkdir -p ${TEST_ROOT_DIR}
-mkdir -p "${TEST_ROOT_DIR}/${LOGDIR_NAME}"
-mkdir -p "${TEST_ROOT_DIR}/${KEYDIR_NAME}"
+mkdir -p ${INITKEYDIR_NAME}
+
+mkdir -p ${TEST_LOG_DIR}
+mkdir -p ${TEST_BUMSTATE_DIR}
 
 mkdir -p ${TEST_PRIM_DIR}
-mkdir -p "${TEST_PRIM_DIR}/${LOGDIR_NAME}"
 mkdir -p "${TEST_PRIM_DIR}/${KEYDIR_NAME}"
 
 mkdir -p ${TEST_BKUP_DIR}
-mkdir -p "${TEST_BKUP_DIR}/${LOGDIR_NAME}"
 mkdir -p "${TEST_BKUP_DIR}/${KEYDIR_NAME}"
 
 # Create the 5 keys
@@ -250,9 +260,9 @@ createEsl $TMP_KEYDIR/db2 $guidfile
 createAuthAppendUpdate db $TMP_KEYDIR/db2 $TMP_KEYDIR/KEK $guidfile
 
 echo "        Deploying keys ..."
-cp "$TMP_KEYDIR/PK.update.auth" "${TEST_ROOT_DIR}/${KEYDIR_NAME}/PK.update.auth"
-cp "$TMP_KEYDIR/KEK.update.auth" "${TEST_ROOT_DIR}/${KEYDIR_NAME}/KEK.update.auth"
-cp "$TMP_KEYDIR/db0.update.auth" "${TEST_ROOT_DIR}/${KEYDIR_NAME}/db.update.auth"
+cp "$TMP_KEYDIR/PK.update.auth" "${INITKEYDIR_NAME}/PK.update.auth"
+cp "$TMP_KEYDIR/KEK.update.auth" "${INITKEYDIR_NAME}/KEK.update.auth"
+cp "$TMP_KEYDIR/db0.update.auth" "${INITKEYDIR_NAME}/db.update.auth"
 cp "$TMP_KEYDIR/db1.append.auth" "${TEST_PRIM_DIR}/${KEYDIR_NAME}/db.append.auth"
 cp "$TMP_KEYDIR/db2.append.auth" "${TEST_BKUP_DIR}/${KEYDIR_NAME}/db.append.auth"
 
@@ -261,10 +271,14 @@ echo
 echo "  Image Setup:"
 echo
 
-echo "      Signing/Deploying images ..."
-sbsign --key ${TMP_KEYDIR}/db0.key --cert ${TMP_KEYDIR}/db0.crt --output "${TEST_BOOT_DIR}/${EFIBIN_NAME}" ${shellimage}
+echo "      Setting up BUM state ..."
 
-sbsign --key ${TMP_KEYDIR}/db0.key --cert ${TMP_KEYDIR}/db0.crt --output "${TEST_ROOT_DIR}/${EFIBIN_NAME}" ${bumimage}
+${BUMSTATE_INIT} ${TEST_BUMSTATE_DIR} ${TEST_BKUP_CFG}
+${BUMSTATE_UPDSTART} ${TEST_BUMSTATE_DIR}
+${BUMSTATE_UPDCMPLT} ${TEST_BUMSTATE_DIR} 3 ${TEST_PRIM_CFG}
+
+echo "      Signing/Deploying images ..."
+sbsign --key ${TMP_KEYDIR}/db0.key --cert ${TMP_KEYDIR}/db0.crt --output "${TEST_BOOT_DIR}/${EFIBIN_NAME}" ${bumimage}
 
 sbsign --key ${TMP_KEYDIR}/db1.key --cert ${TMP_KEYDIR}/db1.crt --output "${TEST_PRIM_DIR}/${EFIBIN_NAME}" ${bumimage}
 
@@ -278,7 +292,7 @@ echo "********************"
 echo
 echo "  Packing:"
 echo
-tar -zcvf "${TAR_FILE}" -C ${EFI_TEST_ESPDIR} "efi" "root" "primary" "backup" --owner=0 --group=0
+tar -zcvf "${TAR_FILE}" -C ${EFI_TEST_ESPDIR} "efi" "initkeys" "bootlog" "bumstate" "${TEST_PRIM_CFG}" "${TEST_BKUP_CFG}" --owner=0 --group=0
 
 echo "********************"
 echo

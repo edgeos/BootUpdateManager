@@ -1,0 +1,23 @@
+BootUpdateManager (BUM)
+=======================
+
+This is custom code developed by Safayet Ahmed at GE Global Research.
+It is used to initially load the EFI certificates for UEFI secure boot
+as well as to manage updates and roll backs to the boot loaders.
+
+The BUM software must be cloned in to the EDK2 directory and built
+within that directly.
+
+Clone the directory into the edk2 root directory.  Then build by
+running the following command:
+
+    $ build -p BootUpdateManager/BootUpdateManager.dsc
+
+The EFI bindary should be somewhere under BootUpdateManager/Build/.
+For example:
+
+    <path-to-edk2>/BootUpdateManager/Build/RELEASE_GCC49/X64/BootUpdateManager/BootUpdateManager/OUTPUT/BootUpdateManager.efi
+
+In order to build, the EDK2 environment must be configured as per
+instructions.  This will define the compiler and the target build
+architecture (among other things).

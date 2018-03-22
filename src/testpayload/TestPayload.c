@@ -67,6 +67,7 @@ EFI_STATUS EFIAPI TestPayload_main( IN EFI_HANDLE       LoadedImageHandle,
     Print(L"\n");
     Print(L"****************************************\n");
     Print(L"\n");
+    while(1){asm( "hlt" );};
     return EFI_SUCCESS;
 }
 

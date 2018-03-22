@@ -12,8 +12,8 @@
 */
 #include "__BUMState.h"
 
-#define ASTATE_FILENAME L"A.state"
-#define BSTATE_FILENAME L"B.state"
+#define ASTATE_FILENAME "A.state"
+#define BSTATE_FILENAME "B.state"
 
 static UINT64 BUMState_GetSum(  IN  BUM_state_t *state_p)
 {
@@ -34,18 +34,18 @@ static VOID BUMState_SetSum(IN  BUM_state_t *state_p)
 
 #define BUMState_SumInvalid(state_p) (0 != BUMState_GetSum(state_p))
 
-EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                IN  CHAR8               *Config)
+EFI_STATUS EFIAPI BUMState_Init(IN  CHAR8   *BootStatDirPath,
+                                IN  CHAR8   *Config)
 {
     EFI_STATUS ret;
     BUM_state_t state;
     /*  Zero-out state*/
     ZeroMem((VOID*)&state, sizeof(state));
     /*  Write to the B.state file */
-    ret = Common_CreateWriteCloseFile(  BootStatDir,
-                                        BSTATE_FILENAME,
-                                        (VOID*)&state,
-                                        0);
+    ret = Common_CreateWriteCloseDirFile(   BootStatDirPath,
+                                            BSTATE_FILENAME,
+                                            (VOID*)&state,
+                                            0);
     if(EFI_ERROR(ret))
         goto exit0;
     /*  Populate the A.state file */
@@ -67,27 +67,27 @@ EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
     /*  Set state.Checksum; */
     BUMState_SetSum(&state);
     /*  Write to the A.state file */
-    ret = Common_CreateWriteCloseFile(  BootStatDir,
-                                        ASTATE_FILENAME,
-                                        (VOID*)&state,
-                                        state.StateSize);
+    ret = Common_CreateWriteCloseDirFile(   BootStatDirPath,
+                                            ASTATE_FILENAME,
+                                            (VOID*)&state,
+                                            state.StateSize);
 exit0:
     return ret;
 }
 
-static EFI_STATUS BUMState_ParseFile(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                        IN  CHAR16              *FileName,
-                                        OUT BUM_state_t         **BUM_state_pp)
+static EFI_STATUS BUMState_ParseFile(   IN  CHAR8       *BootStatDirPath,
+                                        IN  CHAR8       *FileName,
+                                        OUT BUM_state_t **BUM_state_pp)
 {
     EFI_STATUS ret;
     VOID    *buffer;
     UINTN   buffer_size;
     BUM_state_t *BUM_state_p;
     /*  Read the file */
-    ret = Common_OpenReadCloseFile( BootStatDir,
-                                    FileName,
-                                    &buffer,
-                                    &buffer_size );
+    ret = Common_OpenReadCloseDirFile(  BootStatDirPath,
+                                        FileName,
+                                        &buffer,
+                                        &buffer_size );
     if(EFI_ERROR(ret))
         goto exit0;
     /*  Check the size */
@@ -127,18 +127,18 @@ typedef struct {
 #define BUMStatePair_Invalid(pair)  (((pair)->state[BUMSTATE_A_IDX] == NULL)\
                                     && ((pair)->state[BUMSTATE_B_IDX] == NULL))
 
-static VOID BUMStatePair_Get(   IN  EFI_FILE_PROTOCOL   *BootStatDir,
+static VOID BUMStatePair_Get(   IN  CHAR8               *BootStatDirPath,
                                 OUT BUM_state_pair_t    *BUM_state_pair_p)
 {
     EFI_STATUS ret;
     /*  Get A.state */
-    ret = BUMState_ParseFile(   BootStatDir,
+    ret = BUMState_ParseFile(   BootStatDirPath,
                                 ASTATE_FILENAME,
                                 &(BUM_state_pair_p->state[BUMSTATE_A_IDX]));
     if(EFI_ERROR(ret))
         BUM_state_pair_p->state[BUMSTATE_A_IDX] = NULL;
     /*  Get B.state */
-    ret = BUMState_ParseFile(   BootStatDir,
+    ret = BUMState_ParseFile(   BootStatDirPath,
                                 BSTATE_FILENAME,
                                 &(BUM_state_pair_p->state[BUMSTATE_B_IDX]));
     if(EFI_ERROR(ret))
@@ -185,12 +185,12 @@ EFI_STATUS EFIAPI BUMState_Free(IN  BUM_state_t *BUM_state_p)
                                     BUM_state_p->StateSize);
 }
 
-EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                OUT BUM_state_t         **BUM_state_pp)
+EFI_STATUS EFIAPI BUMState_Get( IN  CHAR8       *BootStatDirPath,
+                                OUT BUM_state_t **BUM_state_pp)
 {
     EFI_STATUS ret;
     BUM_state_pair_t    BUM_state_pair;
-    BUMStatePair_Get(   BootStatDir,
+    BUMStatePair_Get(   BootStatDirPath,
                         &BUM_state_pair);
     if(BUMStatePair_Invalid(&BUM_state_pair)){
         ret = EFI_NOT_FOUND;
@@ -203,15 +203,15 @@ EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
     return ret;
 }
 
-EFI_STATUS BUMState_Put(IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                        IN  BUM_state_t         *new_state_p)
+EFI_STATUS EFIAPI BUMState_Put( IN  CHAR8       *BootStatDirPath,
+                                IN  BUM_state_t *new_state_p)
 {
     EFI_STATUS ret;
     /*  Get the state pair */
     BUM_state_pair_t BUM_state_pair;
     BUM_state_t *cur_state_p;
-    CHAR16 *filename;
-    BUMStatePair_Get(   BootStatDir,
+    CHAR8 *filename;
+    BUMStatePair_Get(   BootStatDirPath,
                         &BUM_state_pair);
     if(BUMStatePair_Invalid(&BUM_state_pair)){
         ret = EFI_NOT_READY;
@@ -234,10 +234,10 @@ EFI_STATUS BUMState_Put(IN  EFI_FILE_PROTOCOL   *BootStatDir,
     /*  Write the new next state */
     filename =  (BUM_state_pair.next == BUMSTATE_A_IDX)?
                 ASTATE_FILENAME : BSTATE_FILENAME;
-    ret = Common_CreateWriteCloseFile(  BootStatDir,
-                                        filename,
-                                        (VOID*)new_state_p,
-                                        new_state_p->StateSize);
+    ret = Common_CreateWriteCloseDirFile(   BootStatDirPath,
+                                            filename,
+                                            (VOID*)new_state_p,
+                                            new_state_p->StateSize);
     /*  return the return value from Common_CreateWriteCloseFile */
     /*  Free the state pair */
 exit1:
@@ -265,9 +265,9 @@ VOID EFIAPI BUMStateNext_StartUpdate(IN  BUM_state_t *BUM_state_p)
     BUM_state_p->DfltAttemptsRemaining = 0;
 }
 
-EFI_STATUS BUMStateNext_CompleteUpdate( IN  BUM_state_t *BUM_state_p,
-                                        IN  UINTN       AttemptCount,
-                                        IN  CHAR8       *UpdateConfig)
+EFI_STATUS EFIAPI BUMStateNext_CompleteUpdate(  IN  BUM_state_t *BUM_state_p,
+                                                IN  UINTN       AttemptCount,
+                                                IN  CHAR8       *UpdateConfig)
 {
     EFI_STATUS ret;
     /*  Only do the update if we are currently in AltrConfig */
@@ -288,7 +288,7 @@ exit0:
     return ret;
 }
 
-VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
+VOID EFIAPI BUMStateNext_BootTime(IN  BUM_state_t *BUM_state_p)
 {
     if(0 == BUM_state_p->DfltAttemptsRemaining)
         BUM_state_p->Flags.CurrConfig = BUMSTATE_CONFIG_ALTR;
@@ -298,7 +298,7 @@ VOID BUMStateNext_BootTime(   IN  BUM_state_t *BUM_state_p)
     }
 }
 
-VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
+VOID EFIAPI BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
 {
     if(BUMSTATE_CONFIG_DFLT == BUM_state_p->Flags.CurrConfig)
         BUM_state_p->DfltAttemptsRemaining = BUM_state_p->DfltAttemptCount;
@@ -306,7 +306,7 @@ VOID BUMStateNext_RunTimeInit(IN  BUM_state_t *BUM_state_p)
 }
 
 
-EFI_STATUS BUMState_getCurrConfig(
+EFI_STATUS EFIAPI BUMState_getCurrConfig(
                         IN  BUM_state_t  *BUM_state_p,
                         OUT CHAR8        Dst[static BUMSTATE_CONFIG_MAXLEN])
 {
@@ -318,7 +318,7 @@ EFI_STATUS BUMState_getCurrConfig(
     return CopyConfig(Dst, CurrConfig_p);
 }
 
-EFI_STATUS BUMState_getNonCurrConfig(
+EFI_STATUS EFIAPI BUMState_getNonCurrConfig(
                         IN  BUM_state_t *BUM_state_p,
                         OUT CHAR8 Dst[static BUMSTATE_CONFIG_MAXLEN])
 {

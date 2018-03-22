@@ -10,20 +10,17 @@
 #include "EFIGlue.h"
 #include "BUMState.h"
 
-static int updateComplete(  char        *statusdir_name,
+static int updateComplete(  char        *statedir_name,
                             uint64_t    attemptcount,
                             char        *updateconfig)
 {
     int ret;
-    EFI_FILE_PROTOCOL *statusdir;
     BUM_state_t       *BUM_state_p;
     EFI_STATUS stat;
     /*  Assume success */
     ret = 0;
-    /*  Acquire the status directory */
-    statusdir = GetDirFileProtocol(statusdir_name);
     /*  Acquire the BUM state */
-    stat = BUMState_Get(statusdir, &BUM_state_p);
+    stat = BUMState_Get(statedir_name, &BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Get failed\n");
         ret = -1;
@@ -39,7 +36,7 @@ static int updateComplete(  char        *statusdir_name,
         goto exit1;
     }
     /*  Save the BUM state */
-    stat = BUMState_Put(statusdir, BUM_state_p);
+    stat = BUMState_Put(statedir_name, BUM_state_p);
     if(EFI_ERROR(stat)){
         fprintf(stderr, "    BUMState_Put failed\n");
         ret = -1;
@@ -107,13 +104,13 @@ static int validateargs(char        *attemptcount_str,
     return ret;
 }
 
-static const char *usage =  "<BUM status directory> <default attempt count> "\
+static const char *usage =  "<BUM state directory> <default attempt count> "\
                             "<new configuration>";
 
 int main(int argc, char** argv)
 {
     int ret;
-    char *statusdir_str;
+    char *statedir_str;
     char *attemptcount_str;
     char *updateconfig;
     uint64_t attemptcount;
@@ -121,7 +118,7 @@ int main(int argc, char** argv)
         fprintf(stderr, "Usage: %s %s\n", argv[0], usage);
         ret = -1;
     }else{
-        statusdir_str = argv[1];
+        statedir_str = argv[1];
         attemptcount_str = argv[2];
         updateconfig = argv[3];
         ret = validateargs( attemptcount_str,
@@ -130,7 +127,7 @@ int main(int argc, char** argv)
         if(0 != ret)
             fprintf(stderr, "    validateargs failed\n");
         else{
-            ret = updateComplete(   statusdir_str,
+            ret = updateComplete(   statedir_str,
                                     attemptcount,
                                     updateconfig);
             if(0 != ret)

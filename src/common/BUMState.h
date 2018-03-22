@@ -52,14 +52,14 @@ typedef struct {
     UINT64  Checksum;
 } BUM_state_t;
 
-EFI_STATUS EFIAPI BUMState_Init(IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                IN  CHAR8               *Config);
+EFI_STATUS EFIAPI BUMState_Init(IN  CHAR8   *BootStatDirPath,
+                                IN  CHAR8   *Config);
 
-EFI_STATUS EFIAPI BUMState_Get( IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                OUT BUM_state_t         **BUM_state_pp);
+EFI_STATUS EFIAPI BUMState_Get( IN  CHAR8       *BootStatDirPath,
+                                OUT BUM_state_t **BUM_state_pp);
 
-EFI_STATUS EFIAPI BUMState_Put( IN  EFI_FILE_PROTOCOL   *BootStatDir,
-                                IN  BUM_state_t         *BUM_state_p);
+EFI_STATUS EFIAPI BUMState_Put( IN  CHAR8       *BootStatDirPath,
+                                IN  BUM_state_t *BUM_state_p);
 
 EFI_STATUS EFIAPI BUMState_Free(IN  BUM_state_t *BUM_state_p);
 
